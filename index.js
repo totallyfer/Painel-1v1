@@ -869,8 +869,8 @@ client.on('interactionCreate', async interaction => {
             }
 
             const textResult = isDraw 
-                ? 'Desafio finalizado ambos empataram' 
-                : `Desafio finalizado o vencedor foi ${winnerUserObj ? winnerUserObj.username : 'Desconhecido'}`;
+                ? '<a:sla:1551829027801800714> Desafio finalizado ambos empataram' 
+                : `<a:sla:1551829027801800714> Desafio finalizado o vencedor foi ${winnerUserObj ? winnerUserObj.username : 'Desconhecido'}`;
 
             try {
                 const starterMessage = await interaction.channel.fetchStarterMessage().catch(() => null);
