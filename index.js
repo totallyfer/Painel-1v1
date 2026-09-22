@@ -234,7 +234,6 @@ client.on('interactionCreate', async interaction => {
                 { name: '📌 Regras', value: '• Vitória: **+32 pts** | Derrota: **-32 pts** | Empate: **+10 pts**', inline: false }
             );
 
-        // Botão com o emoji animado <a:sla:1551829027801800714>
         const btnAccept = new ButtonBuilder()
             .setCustomId(`aceitar_desafio_${challengerId}_${targetId}_${encodeURIComponent(mapa)}`)
             .setLabel('Aceitar Desafio')
@@ -320,7 +319,6 @@ client.on('interactionCreate', async interaction => {
 
                 await thread.send({ embeds: [embedThread], components: [rowResult, rowCancel] });
 
-                // Altera para o emoji animado <a:emoji_67:1551828003015893023>
                 const originalEmbed = EmbedBuilder.from(interaction.message.embeds[0])
                     .setTitle('<a:emoji_67:1551828003015893023> DESAFIO 1v1 EM ANDAMENTO')
                     .setColor(0xF1C40F);
@@ -488,11 +486,16 @@ client.on('interactionCreate', async interaction => {
             saveDB(db);
             interaction.client.pendingResults.delete(interaction.channelId);
 
+            // Atualiza a mensagem original pública no canal principal
             try {
                 const starterMessage = await interaction.channel.fetchStarterMessage();
                 if (starterMessage) {
+                    const finalTitle = isDraw 
+                        ? '🤝 DESAFIO FINALIZADO - EMPATE' 
+                        : `🏆 DESAFIO FINALIZADO - VENCEDOR: <@${winnerId}>`;
+
                     const finalEmbed = EmbedBuilder.from(starterMessage.embeds[0])
-                        .setTitle(isDraw ? 'Desafio finalizado ambos empataram' : `Desafio finalizado o vencedor foi <@${winnerId}>`)
+                        .setTitle(finalTitle)
                         .setColor(0x00FF00);
                     
                     const fields = finalEmbed.data.fields;
