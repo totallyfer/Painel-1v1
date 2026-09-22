@@ -1,7 +1,8 @@
 const { 
     Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, 
     EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, 
-    StringSelectMenuBuilder, ChannelType, PermissionFlagsBits, AttachmentBuilder 
+    StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, 
+    ChannelType, PermissionFlagsBits, AttachmentBuilder 
 } = require('discord.js');
 const fs = require('fs');
 const express = require('express');
@@ -26,17 +27,33 @@ const CLIENT_ID = "1551768205444259862";
 
 const CARGO_PROCURANDO_1V1 = "1545802197101576205";
 const CARGO_ADMIN = "1545802098338304032";
+const CARGO_STAFF = "1545802108522070026";
 
-// --- Base de dados local (gravação atómica para evitar ficheiro corrompido) ---
+// --- Mapeamento de Cores ---
+const COLOR_MAP = {
+    'lavanda': '#9b59b6',
+    'azul': '#3498db',
+    'dourado': '#f1c40f',
+    'verde': '#2ecc71',
+    'cinza': '#34495e',
+    'branco': '#ecf0f1',
+    'rosa': '#e91e63',
+    'amarelo': '#f39c12',
+    'ciano': '#00bcd4'
+};
+
+// --- Base de dados local ---
 const DB_FILE = './database.json';
 function loadDB() {
     if (!fs.existsSync(DB_FILE)) {
-        fs.writeFileSync(DB_FILE, JSON.stringify({ players: {} }, null, 2));
+        fs.writeFileSync(DB_FILE, JSON.stringify({ players: {}, settings: { ligaNome: 'SFC 1V1 - SEASON 1', ligaCor: 'dourado' } }, null, 2));
     }
     try {
-        return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+        const data = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+        if (!data.settings) data.settings = { ligaNome: 'SFC 1V1 - SEASON 1', ligaCor: 'dourado' };
+        return data;
     } catch {
-        return { players: {} };
+        return { players: {}, settings: { ligaNome: 'SFC 1V1 - SEASON 1', ligaCor: 'dourado' } };
     }
 }
 function saveDB(data) {
@@ -46,7 +63,7 @@ function saveDB(data) {
 }
 
 // ============================================================
-// --- FUNÇÃO AUXILIAR: RETÂNGULO ARREDONDADO ---
+// --- FUNÇÕES AUXILIARES DE CANVAS ---
 // ============================================================
 function roundRect(ctx, x, y, width, height, radius, fill, stroke) {
     ctx.beginPath();
@@ -75,18 +92,17 @@ function drawRoundImage(ctx, img, x, y, size) {
 }
 
 // ============================================================
-// --- GERADOR DE IMAGEM: ANÁLISE DE PERFIL (EXEMPLO 400) ---
+// --- GERADOR DE IMAGEM: ANÁLISE DE PERFIL ---
 // ============================================================
-async function generateAnaliseImage(member, stats, rankPosition) {
+async function generateAnaliseImage(member, stats, rankPosition, dbSettings = {}) {
     const canvas = createCanvas(800, 450);
     const ctx = canvas.getContext('2d');
+    const accentColor = COLOR_MAP[dbSettings.ligaCor] || '#e74c3c';
 
-    // Fundo escuro texturizado
     ctx.fillStyle = '#141416';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Caixa superior "LIGA ATUAL"
-    ctx.strokeStyle = '#e74c3c';
+    ctx.strokeStyle = accentColor;
     ctx.lineWidth = 2;
     roundRect(ctx, 480, 30, 280, 50, 10, false, true);
     ctx.fillStyle = '#888888';
@@ -95,9 +111,8 @@ async function generateAnaliseImage(member, stats, rankPosition) {
     ctx.fillText('LIGA ATUAL', 620, 50);
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 14px sans-serif';
-    ctx.fillText('SFC 1V1 - SEASON 1', 620, 68);
+    ctx.fillText((dbSettings.ligaNome || 'SFC 1V1 - SEASON 1').toUpperCase(), 620, 68);
 
-    // Avatar circular do utilizador
     let avatarImg = null;
     try {
         const avatarURL = member.displayAvatarURL ? member.displayAvatarURL({ extension: 'png', size: 256 }) : `https://cdn.discordapp.com/embed/avatars/0.png`;
@@ -113,19 +128,16 @@ async function generateAnaliseImage(member, stats, rankPosition) {
         ctx.fill();
     }
 
-    // Nome do Utilizador
     ctx.textAlign = 'left';
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 36px sans-serif';
     const username = member.displayName || member.username || 'Jogador';
     ctx.fillText(username.slice(0, 20), 270, 170);
 
-    // Rank e Pontos
-    ctx.fillStyle = '#e74c3c';
+    ctx.fillStyle = accentColor;
     ctx.font = 'bold 20px sans-serif';
     ctx.fillText(`RANK #${rankPosition}  \vert{}${stats.points} PTS`, 270, 210);
 
-    // Barra de Taxa de Vitória
     ctx.fillStyle = '#aaaaaa';
     ctx.font = '11px sans-serif';
     ctx.fillText('TAXA DE VITÓRIA', 270, 260);
@@ -135,19 +147,16 @@ async function generateAnaliseImage(member, stats, rankPosition) {
     const winRate = totalJogos > 0 ? ((stats.wins / totalJogos) * 100).toFixed(1) : '0.0';
     ctx.fillText(`${winRate}%`, 760, 260);
 
-    // Fundo da barra
     ctx.fillStyle = '#2c2d30';
     roundRect(ctx, 270, 275, 490, 8, 4, true, false);
     
-    // Preenchimento da barra
-    ctx.fillStyle = '#e74c3c';
+    ctx.fillStyle = accentColor;
     const barraWidth = Math.max(10, (490 * parseFloat(winRate)) / 100);
     roundRect(ctx, 270, 275, barraWidth, 8, 4, true, false);
 
-    // Caixa de Vitórias
     ctx.fillStyle = '#1e1f22';
     roundRect(ctx, 360, 310, 180, 100, 12, true, false);
-    ctx.fillStyle = '#e74c3c';
+    ctx.fillStyle = accentColor;
     ctx.fillRect(360, 310, 4, 100);
     ctx.fillStyle = '#aaaaaa';
     ctx.font = '11px sans-serif';
@@ -157,7 +166,6 @@ async function generateAnaliseImage(member, stats, rankPosition) {
     ctx.font = 'bold 36px sans-serif';
     ctx.fillText(stats.wins || 0, 385, 385);
 
-    // Caixa de Derrotas
     ctx.fillStyle = '#1e1f22';
     roundRect(ctx, 555, 310, 180, 100, 12, true, false);
     ctx.fillStyle = '#555555';
@@ -173,39 +181,37 @@ async function generateAnaliseImage(member, stats, rankPosition) {
 }
 
 // ============================================================
-// --- GERADOR DE IMAGEM: TABELA DE RANKING (EXEMPLO 401) ---
+// --- GERADOR DE IMAGEM: TABELA DE RANKING ---
 // ============================================================
 const ROW_H = 75, W = 800, HEADER_H = 130;
 
-async function generateRankingImage(playersArray, page = 0) {
-    const PER_PAGE = 4; // Visual idêntico ao modelo com 4 itens por página
+async function generateRankingImage(playersArray, page = 0, dbSettings = {}) {
+    const PER_PAGE = 4;
     const startIdx = page * PER_PAGE;
     const current = playersArray.slice(startIdx, startIdx + PER_PAGE);
     const H = HEADER_H + Math.max(current.length, 1) * ROW_H + 60;
 
     const canvas = createCanvas(W, H);
     const ctx = canvas.getContext('2d');
+    const accentColor = COLOR_MAP[dbSettings.ligaCor] || '#e74c3c';
 
-    // Fundo escuro
     ctx.fillStyle = '#141416';
     ctx.fillRect(0, 0, W, H);
 
-    // Título Principal
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 32px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('TABELA 1V1', W / 2, 45);
 
-    // Caixa LIGA ATUAL
-    ctx.strokeStyle = '#e74c3c';
+    ctx.strokeStyle = accentColor;
     ctx.lineWidth = 1.5;
-    roundRect(ctx, 300, 60, 200, 35, 8, false, true);
+    roundRect(ctx, 250, 60, 300, 35, 8, false, true);
     ctx.fillStyle = '#888888';
     ctx.font = '9px sans-serif';
     ctx.fillText('LIGA ATUAL', W / 2, 75);
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 11px sans-serif';
-    ctx.fillText('SFC 1V1 - SEASON 1', W / 2, 88);
+    ctx.fillText((dbSettings.ligaNome || 'SFC 1V1 - SEASON 1').toUpperCase(), W / 2, 88);
 
     if (current.length === 0) {
         ctx.fillStyle = '#888888';
@@ -215,29 +221,24 @@ async function generateRankingImage(playersArray, page = 0) {
     }
 
     let startY = 120;
-
     for (let i = 0; i < current.length; i++) {
         const p = current[i];
         const rank = startIdx + i + 1;
 
-        // Caixa de fundo translúcida
         ctx.fillStyle = 'rgba(30, 31, 34, 0.7)';
         roundRect(ctx, 50, startY, 700, 60, 10, true, false);
 
-        // Detalhe lateral esquerdo colorido para o Top 3 / Padrão
-        if (rank === 1) ctx.fillStyle = '#f1c40f'; // Ouro
-        else if (rank === 2) ctx.fillStyle = '#95a5a6'; // Prata
-        else if (rank === 3) ctx.fillStyle = '#d35400'; // Bronze
-        else ctx.fillStyle = '#e74c3c'; // Vermelho SFC
+        if (rank === 1) ctx.fillStyle = '#f1c40f';
+        else if (rank === 2) ctx.fillStyle = '#95a5a6';
+        else if (rank === 3) ctx.fillStyle = '#d35400';
+        else ctx.fillStyle = accentColor;
         ctx.fillRect(50, startY, 5, 60);
 
-        // Posição (#1, #2...)
         ctx.fillStyle = rank === 1 ? '#f1c40f' : rank === 2 ? '#95a5a6' : rank === 3 ? '#d35400' : '#ffffff';
         ctx.font = 'bold 20px sans-serif';
         ctx.textAlign = 'left';
         ctx.fillText(`#${rank}`, 75, startY + 36);
 
-        // Avatar
         let avatarImg = null;
         try {
             if (p.avatarURL) avatarImg = await loadImage(p.avatarURL);
@@ -252,19 +253,16 @@ async function generateRankingImage(playersArray, page = 0) {
             ctx.fill();
         }
 
-        // Nome do Utilizador
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 18px sans-serif';
         ctx.fillText((p.username || 'Jogador').slice(0, 18), 185, startY + 36);
 
-        // Taxa de Vitória
         const total = (p.wins || 0) + (p.losses || 0) + (p.draws || 0);
         const wr = total > 0 ? ((p.wins / total) * 100).toFixed(1) : '0.0';
         ctx.fillStyle = '#2ecc71';
         ctx.font = '12px sans-serif';
         ctx.fillText(`TAXA DE VITÓRIA: ${wr}%`, 480, startY + 36);
 
-        // Pontos à direita
         ctx.fillStyle = '#f1c40f';
         ctx.font = 'bold 24px sans-serif';
         ctx.textAlign = 'right';
@@ -273,7 +271,6 @@ async function generateRankingImage(playersArray, page = 0) {
         startY += 70;
     }
 
-    // Rodapé com o nome SFC
     ctx.fillStyle = '#777777';
     ctx.font = '11px sans-serif';
     ctx.textAlign = 'center';
@@ -282,7 +279,6 @@ async function generateRankingImage(playersArray, page = 0) {
     return canvas.toBuffer('image/png');
 }
 
-// Devolve array de players ordenado, já com username e avatar carregados
 async function getRankedPlayers(db) {
     const players = Object.values(db.players)
         .filter(p => p.points > 0)
@@ -304,16 +300,15 @@ async function getRankedPlayers(db) {
     return enriched;
 }
 
-// Gera a embed + imagem + botões de paginação da tabela
-async function buildTabelaMessage(players, page) {
+async function buildTabelaMessage(players, page, dbSettings = {}) {
     const PER_PAGE = 4;
-    const buffer = await generateRankingImage(players, page);
+    const buffer = await generateRankingImage(players, page, dbSettings);
     const attachment = new AttachmentBuilder(buffer, { name: `tabela_pagina_${page + 1}.png` });
 
     const totalPages = Math.ceil(players.length / PER_PAGE) || 1;
     const embed = new EmbedBuilder()
-        .setTitle('🏆 Tabela de Classificação - SFC')
-        .setColor(0xE74C3C)
+        .setTitle(`🏆 Tabela de Classificação - ${dbSettings.ligaNome || 'SFC'}`)
+        .setColor(COLOR_MAP[dbSettings.ligaCor] || 0xE74C3C)
         .setImage(`attachment://tabela_pagina_${page + 1}.png`)
         .setTimestamp()
         .setFooter({ text: `Página ${page + 1} de${totalPages} • SFC 1V1` });
@@ -345,6 +340,10 @@ client.once('ready', async () => {
             .addStringOption(option => option.setName('modo').setDescription('Modo').setRequired(true).addChoices({ name: '1v1', value: '1v1' }))
             .addUserOption(option => option.setName('utilizador').setDescription('Membro a analisar (opcional)').setRequired(false)),
         new SlashCommandBuilder()
+            .setName('painel')
+            .setDescription('Painel de controlo administrativo para gerir a liga e tabelas (Apenas Staff)')
+            .setDMPermission(false),
+        new SlashCommandBuilder()
             .setName('reset')
             .setDescription('Reseta a tabela e dados de 1v1 (Apenas Admins)')
             .addStringOption(option => option.setName('modo').setDescription('Modo').setRequired(true).addChoices({ name: '1v1', value: '1v1' }))
@@ -368,14 +367,12 @@ client.on('interactionCreate', async interaction => {
 
         if (commandName === 'tabela') {
             await interaction.deferReply();
-
             const players = await getRankedPlayers(db);
             if (players.length === 0) {
                 return await interaction.editReply({ content: '⚠️ Ainda não existem jogadores com pontuação positiva na tabela 1v1!' });
             }
-
             try {
-                const payload = await buildTabelaMessage(players, 0);
+                const payload = await buildTabelaMessage(players, 0, db.settings);
                 return await interaction.editReply(payload);
             } catch (err) {
                 console.error('Erro ao gerar imagem da tabela:', err);
@@ -385,7 +382,6 @@ client.on('interactionCreate', async interaction => {
 
         if (commandName === 'desafiar') {
             const adversario = interaction.options.getUser('adversario');
-
             if (adversario && adversario.id === interaction.user.id) {
                 return await interaction.reply({ content: '❌ Não podes desafiar a ti próprio!', ephemeral: true });
             }
@@ -426,11 +422,9 @@ client.on('interactionCreate', async interaction => {
 
         if (commandName === 'analise') {
             await interaction.deferReply();
-
             const targetUser = interaction.options.getUser('utilizador') || interaction.user;
             const pData = db.players[targetUser.id] || { points: 0, wins: 0, draws: 0, losses: 0 };
 
-            // Posição na tabela
             const allPlayers = Object.values(db.players).sort((a, b) => b.points - a.points);
             const position = allPlayers.findIndex(p => p.userId === targetUser.id);
             const posText = position >= 0 ? position + 1 : allPlayers.length + 1;
@@ -438,12 +432,12 @@ client.on('interactionCreate', async interaction => {
             const memberObj = await interaction.guild.members.fetch(targetUser.id).catch(() => targetUser);
 
             try {
-                const buffer = await generateAnaliseImage(memberObj, pData, posText);
+                const buffer = await generateAnaliseImage(memberObj, pData, posText, db.settings);
                 const attachment = new AttachmentBuilder(buffer, { name: `analise_${targetUser.username}.png` });
 
                 const embed = new EmbedBuilder()
                     .setTitle(`📊 Perfil de Desempenho - ${targetUser.username}`)
-                    .setColor(0xE74C3C)
+                    .setColor(COLOR_MAP[db.settings.ligaCor] || 0xE74C3C)
                     .setImage(`attachment://analise_${targetUser.username}.png`)
                     .setTimestamp();
 
@@ -452,6 +446,31 @@ client.on('interactionCreate', async interaction => {
                 console.error('Erro ao gerar imagem de análise:', err);
                 return await interaction.editReply({ content: '❌ Erro ao gerar o painel de análise.' });
             }
+        }
+
+        if (commandName === 'painel') {
+            if (!interaction.member.roles.cache.has(CARGO_STAFF) && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+                return await interaction.reply({ content: '❌ Apenas membros da **Equipe Staff** podem aceder a este painel!', ephemeral: true });
+            }
+
+            const settings = db.settings;
+            const embed = new EmbedBuilder()
+                .setTitle('⚙️ Painel de Controlo Administrativo - 1v1')
+                .setDescription(
+                    `Gerencie as configurações visuais e da liga atual diretamente por aqui.\n\n` +
+                    `📌 **Liga Atual:** \`${settings.ligaNome}\`\n` +
+                    `🎨 **Cor Temática:** \`${settings.ligaCor}\``
+                )
+                .setColor(COLOR_MAP[settings.ligaCor] || 0xE74C3C)
+                .setTimestamp();
+
+            const rowButtons = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('painel_mudar_titulo').setLabel('Mudar Título da Liga').setStyle(ButtonStyle.Primary).setEmoji('✏️'),
+                new ButtonBuilder().setCustomId('painel_mudar_cor').setLabel('Mudar Cor da Tabela').setStyle(ButtonStyle.Secondary).setEmoji('🎨'),
+                new ButtonBuilder().setCustomId('painel_nova_liga').setLabel('Criar Nova Liga (Reset)').setStyle(ButtonStyle.Danger).setEmoji('🚨')
+            );
+
+            return await interaction.reply({ embeds: [embed], components: [rowButtons], ephemeral: true });
         }
 
         if (commandName === 'reset') {
@@ -464,6 +483,101 @@ client.on('interactionCreate', async interaction => {
         }
     }
 
+    // --- INTERAÇÕES DE BOTÕES DO PAINEL ---
+    if (interaction.isButton() && interaction.customId.startsWith('painel_')) {
+        if (!interaction.member.roles.cache.has(CARGO_STAFF) && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+            return await interaction.reply({ content: '❌ Não tens permissão para usar estes botões.', ephemeral: true });
+        }
+
+        if (interaction.customId === 'painel_mudar_titulo') {
+            const modal = new ModalBuilder()
+                .setCustomId('modal_mudar_titulo')
+                .setTitle('Alterar Título da Liga');
+
+            const inputTitulo = new TextInputBuilder()
+                .setCustomId('input_novo_titulo')
+                .setLabel('Novo Nome / Título da Liga')
+                .setStyle(TextInputStyle.Short)
+                .setPlaceholder('Ex: SFC 1V1 - SEASON 2')
+                .setRequired(true)
+                .setMaxLength(50);
+
+            modal.addComponents(new ActionRowBuilder().addComponents(inputTitulo));
+            return await interaction.showModal(modal);
+        }
+
+        if (interaction.customId === 'painel_mudar_cor') {
+            const selectCor = new StringSelectMenuBuilder()
+                .setCustomId('select_cor_tabela')
+                .setPlaceholder('🎨 Selecione a cor de fundo/detalhe...')
+                .addOptions([
+                    { label: 'Lavanda', value: 'lavanda', description: 'Tom roxo suave' },
+                    { label: 'Azul', value: 'azul', description: 'Azul clássico' },
+                    { label: 'Dourado', value: 'dourado', description: 'Amarelo dourado premium' },
+                    { label: 'Verde', value: 'verde', description: 'Verde esmeralda' },
+                    { label: 'Cinza', value: 'cinza', description: 'Cinza escuro elegante' },
+                    { label: 'Branco', value: 'branco', description: 'Branco claro' },
+                    { label: 'Rosa', value: 'rosa', description: 'Rosa vibrante' },
+                    { label: 'Amarelo', value: 'amarelo', description: 'Amarelo vivo' },
+                    { label: 'Ciano', value: 'ciano', description: 'Azul ciano brilhante' }
+                ]);
+
+            const row = new ActionRowBuilder().addComponents(selectCor);
+            return await interaction.reply({ content: 'Selecione abaixo a nova cor para o painel e tabela:', components: [row], ephemeral: true });
+        }
+
+        if (interaction.customId === 'painel_nova_liga') {
+            const modal = new ModalBuilder()
+                .setCustomId('modal_nova_liga')
+                .setTitle('Criar Nova Liga');
+
+            const inputNome = new TextInputBuilder()
+                .setCustomId('input_nome_nova_liga')
+                .setLabel('Nome da Nova Liga')
+                .setStyle(TextInputStyle.Short)
+                .setPlaceholder('Ex: SFC 1V1 - SEASON 2')
+                .setRequired(true)
+                .setMaxLength(50);
+
+            modal.addComponents(new ActionRowBuilder().addComponents(inputNome));
+            return await interaction.showModal(modal);
+        }
+    }
+
+    if (interaction.isStringSelectMenu() && interaction.customId === 'select_cor_tabela') {
+        const novaCor = interaction.values[0];
+        db.settings.ligaCor = novaCor;
+        saveDB(db);
+        return await interaction.update({ content: `✅ Cor da tabela alterada com sucesso para **${novaCor.toUpperCase()}**!`, components: [] });
+    }
+
+    if (interaction.isModalSubmit()) {
+        if (interaction.customId === 'modal_mudar_titulo') {
+            const novoTitulo = interaction.fields.getTextInputValue('input_novo_titulo');
+            db.settings.ligaNome = novoTitulo;
+            saveDB(db);
+            return await interaction.reply({ content: `✅ Título da liga atualizado com sucesso para: \`${novoTitulo}\``, ephemeral: true });
+        }
+
+        if (interaction.customId === 'modal_nova_liga') {
+            const novoNome = interaction.fields.getTextInputValue('input_nome_nova_liga');
+            
+            // Exclui/reseta os dados da liga anterior automaticamente e cria a nova
+            db.players = {};
+            db.settings = {
+                ligaNome: novoNome,
+                ligaCor: 'dourado'
+            };
+            saveDB(db);
+
+            return await interaction.reply({ 
+                content: `🚨 **Nova liga criada com sucesso!**\n• A tabela anterior foi limpa/excluída automaticamente.\n• **Nome da Nova Liga:** \`${novoNome}\``, 
+                ephemeral: true 
+            });
+        }
+    }
+
+    // --- Outras interações (Desafios, Mapas e Tabela Páginas) ---
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith('escolher_mapa_')) {
         const parts = interaction.customId.split('_');
         const challengerId = parts[2];
@@ -510,7 +624,6 @@ client.on('interactionCreate', async interaction => {
 
     if (interaction.isButton() && (interaction.customId.startsWith('tabela_prev_') || interaction.customId.startsWith('tabela_next_'))) {
         await interaction.deferUpdate();
-
         const pageChange = interaction.customId.startsWith('tabela_next_') ? 1 : -1;
         const currentPage = parseInt(interaction.customId.split('_').pop(), 10);
         const newPage = currentPage + pageChange;
@@ -521,7 +634,7 @@ client.on('interactionCreate', async interaction => {
         }
 
         try {
-            const payload = await buildTabelaMessage(players, newPage);
+            const payload = await buildTabelaMessage(players, newPage, db.settings);
             return await interaction.editReply(payload);
         } catch (err) {
             console.error('Erro ao paginar tabela:', err);
@@ -529,157 +642,151 @@ client.on('interactionCreate', async interaction => {
         }
     }
 
-    if (interaction.isButton()) {
-        if (interaction.customId.startsWith('aceitar_desafio_')) {
-            const parts = interaction.customId.split('_');
-            const challengerId = parts[2];
-            const targetId = parts[3];
-            const mapa = decodeURIComponent(parts[4]);
+    if (interaction.isButton() && interaction.customId.startsWith('aceitar_desafio_')) {
+        const parts = interaction.customId.split('_');
+        const challengerId = parts[2];
+        const targetId = parts[3];
+        const mapa = decodeURIComponent(parts[4]);
 
-            if (interaction.user.id === challengerId) {
-                return await interaction.reply({ content: '❌ Não podes aceitar o teu próprio desafio!', ephemeral: true });
-            }
-            if (targetId !== 'aleatorio' && interaction.user.id !== targetId) {
-                return await interaction.reply({ content: '❌ Este desafio foi direcionado para outro jogador!', ephemeral: true });
-            }
-
-            try {
-                const thread = await interaction.message.startThread({
-                    name: `1v1-${interaction.user.username}`,
-                    autoArchiveDuration: 60,
-                    reason: 'Partida 1v1 privada'
-                });
-
-                await thread.members.add(challengerId).catch(() => {});
-                await thread.members.add(interaction.user.id).catch(() => {});
-
-                const embedThread = new EmbedBuilder()
-                    .setTitle('⚔️ SALA DE CONFRONTO 1v1')
-                    .setDescription(
-                        `**Participantes:** <@${challengerId}> ⚔️ <@${interaction.user.id}>\n` +
-                        `**Mapa:** \`${mapa}\`\n\n` +
-                        `### 📌 Regras e Instruções do Tópico:\n` +
-                        `1. **Envie o link do servidor privado** aqui no tópico para irem para o 1v1.\n` +
-                        `2. Ambos os participantes podem enviar mensagens livremente.\n` +
-                        `3. Joguem a partida no mapa indicado.\n` +
-                        `4. Após o jogo, **ambos** devem selecionar o resultado exato no menu abaixo.\n` +
-                        `⚠️ *Nota: O cancelamento exige que ambos cliquem no botão de cancelar.*`
-                    )
-                    .setColor(0x00FF99);
-
-                const selectMenuResult = new StringSelectMenuBuilder()
-                    .setCustomId(`resultado_1v1_${challengerId}_${interaction.user.id}`)
-                    .setPlaceholder('Selecione o resultado exato do confronto...')
-                    .addOptions([
-                        { label: 'Desafiante (1-0)', value: 'desafiante_1_0', description: 'Desafiante venceu por 1 a 0' },
-                        { label: 'Adversário (1-0)', value: 'adversario_1_0', description: 'Adversário venceu por 1 a 0' },
-                        { label: 'Desafiante (2-1)', value: 'desafiante_2_1', description: 'Desafiante venceu por 2 a 1' },
-                        { label: 'Desafiante (2-0)', value: 'desafiante_2_0', description: 'Desafiante venceu por 2 a 0' },
-                        { label: 'Adversário (2-1)', value: 'adversario_2_1', description: 'Adversário venceu por 2 a 1' },
-                        { label: 'Adversário (2-0)', value: 'adversario_2_0', description: 'Adversário venceu por 2 a 0' },
-                        { label: 'Empate Ambos', value: 'empate', description: 'A partida terminou em empate (+10 pts para cada)' }
-                    ]);
-
-                const btnCancel = new ButtonBuilder()
-                    .setCustomId(`cancelar_desafio_${challengerId}_${interaction.user.id}`)
-                    .setLabel('❌ Cancelar Desafio (0/2)')
-                    .setStyle(ButtonStyle.Danger);
-
-                const rowResult = new ActionRowBuilder().addComponents(selectMenuResult);
-                const rowCancel = new ActionRowBuilder().addComponents(btnCancel);
-
-                await thread.send({ 
-                    content: `⚔️ <@${challengerId}> e <@${interaction.user.id}> o vosso tópico privado foi criado!`, 
-                    embeds: [embedThread], 
-                    components: [rowResult, rowCancel] 
-                });
-
-                const originalEmbed = EmbedBuilder.from(interaction.message.embeds[0])
-                    .setTitle('⚔️ Desafio em andamento')
-                    .setColor(0xF1C40F);
-
-                const fields = originalEmbed.data.fields;
-                if (fields && fields[1]) {
-                    fields[1].value = `<@${interaction.user.id}>`;
-                }
-
-                await interaction.update({ embeds: [originalEmbed], components: [] });
-
-                // --- Timeout de 2 horas ---
-                const timeoutHandle = setTimeout(async () => {
-                    try {
-                        const fetchedChannel = await client.channels.fetch(thread.id).catch(() => null);
-                        if (fetchedChannel) {
-                            await fetchedChannel.send('⚠️ O tempo limite de 2 horas expirou. O desafio foi cancelado automaticamente por inatividade.');
-                            setTimeout(async () => { try { await fetchedChannel.delete(); } catch (e) {} }, 5000);
-                        }
-                        const starterMessage = await interaction.channel.messages.fetch(interaction.message.id).catch(() => null);
-                        if (starterMessage) await starterMessage.delete().catch(() => {});
-                    } catch (e) {
-                        console.error('Erro no timeout de 2h:', e);
-                    }
-                }, 2 * 60 * 60 * 1000);
-
-                interaction.client.matchTimeouts = interaction.client.matchTimeouts || new Map();
-                interaction.client.matchTimeouts.set(thread.id, timeoutHandle);
-
-            } catch (err) {
-                console.error(err);
-                return await interaction.reply({ content: '❌ Erro ao criar o tópico privado.', ephemeral: true });
-            }
+        if (interaction.user.id === challengerId) {
+            return await interaction.reply({ content: '❌ Não podes aceitar o teu próprio desafio!', ephemeral: true });
+        }
+        if (targetId !== 'aleatorio' && interaction.user.id !== targetId) {
+            return await interaction.reply({ content: '❌ Este desafio foi direcionado para outro jogador!', ephemeral: true });
         }
 
-        if (interaction.customId.startsWith('cancelar_desafio_')) {
-            const parts = interaction.customId.split('_');
-            const challengerId = parts[2];
-            const acceptorId = parts[3];
+        try {
+            const thread = await interaction.message.startThread({
+                name: `1v1-${interaction.user.username}`,
+                autoArchiveDuration: 60,
+                reason: 'Partida 1v1 privada'
+            });
 
-            if (interaction.user.id !== challengerId && interaction.user.id !== acceptorId) {
-                return await interaction.reply({ content: '❌ Apenas os participantes podem cancelar o desafio!', ephemeral: true });
+            await thread.members.add(challengerId).catch(() => {});
+            await thread.members.add(interaction.user.id).catch(() => {});
+
+            const embedThread = new EmbedBuilder()
+                .setTitle('⚔️ SALA DE CONFRONTO 1v1')
+                .setDescription(
+                    `**Participantes:** <@${challengerId}> ⚔️ <@${interaction.user.id}>\n` +
+                    `**Mapa:** \`${mapa}\`\n\n` +
+                    `### 📌 Regras e Instruções do Tópico:\n` +
+                    `1. **Envie o link do servidor privado** aqui no tópico para irem para o 1v1.\n` +
+                    `2. Ambos os participantes podem enviar mensagens livremente.\n` +
+                    `3. Joguem a partida no mapa indicado.\n` +
+                    `4. Após o jogo, **ambos** devem selecionar o resultado exato no menu abaixo.\n` +
+                    `⚠️ *Nota: O cancelamento exige que ambos cliquem no botão de cancelar.*`
+                )
+                .setColor(0x00FF99);
+
+            const selectMenuResult = new StringSelectMenuBuilder()
+                .setCustomId(`resultado_1v1_${challengerId}_${interaction.user.id}`)
+                .setPlaceholder('Selecione o resultado exato do confronto...')
+                .addOptions([
+                    { label: 'Desafiante (1-0)', value: 'desafiante_1_0', description: 'Desafiante venceu por 1 a 0' },
+                    { label: 'Adversário (1-0)', value: 'adversario_1_0', description: 'Adversário venceu por 1 a 0' },
+                    { label: 'Desafiante (2-1)', value: 'desafiante_2_1', description: 'Desafiante venceu por 2 a 1' },
+                    { label: 'Desafiante (2-0)', value: 'desafiante_2_0', description: 'Desafiante venceu por 2 a 0' },
+                    { label: 'Adversário (2-1)', value: 'adversario_2_1', description: 'Adversário venceu por 2 a 1' },
+                    { label: 'Adversário (2-0)', value: 'adversario_2_0', description: 'Adversário venceu por 2 a 0' },
+                    { label: 'Empate Ambos', value: 'empate', description: 'A partida terminou em empate (+10 pts para cada)' }
+                ]);
+
+            const btnCancel = new ButtonBuilder()
+                .setCustomId(`cancelar_desafio_${challengerId}_${interaction.user.id}`)
+                .setLabel('❌ Cancelar Desafio (0/2)')
+                .setStyle(ButtonStyle.Danger);
+
+            const rowResult = new ActionRowBuilder().addComponents(selectMenuResult);
+            const rowCancel = new ActionRowBuilder().addComponents(btnCancel);
+
+            await thread.send({ 
+                content: `⚔️ <@${challengerId}> e <@${interaction.user.id}> o vosso tópico privado foi criado!`, 
+                embeds: [embedThread], 
+                components: [rowResult, rowCancel] 
+            });
+
+            const originalEmbed = EmbedBuilder.from(interaction.message.embeds[0])
+                .setTitle('⚔️ Desafio em andamento')
+                .setColor(0xF1C40F);
+
+            const fields = originalEmbed.data.fields;
+            if (fields && fields[1]) {
+                fields[1].value = `<@${interaction.user.id}>`;
             }
 
-            interaction.client.cancelVotes = interaction.client.cancelVotes || new Map();
-            let cancelSet = interaction.client.cancelVotes.get(interaction.channelId) || new Set();
-            cancelSet.add(interaction.user.id);
-            interaction.client.cancelVotes.set(interaction.channelId, cancelSet);
+            await interaction.update({ embeds: [originalEmbed], components: [] });
 
-            const count = cancelSet.size;
-
-            if (count < 2) {
+            const timeoutHandle = setTimeout(async () => {
                 try {
-                    const actionRows = interaction.message.components;
-                    for (let r of actionRows) {
-                        for (let comp of r.components) {
-                            if (comp.customId && comp.customId.startsWith('cancelar_desafio_')) {
-                                comp.data.label = `❌ Cancelar Desafio (${count}/2)`;
-                            }
-                        }
+                    const fetchedChannel = await client.channels.fetch(thread.id).catch(() => null);
+                    if (fetchedChannel) {
+                        await fetchedChannel.send('⚠️ O tempo limite de 2 horas expirou. O desafio foi cancelado automaticamente por inatividade.');
+                        setTimeout(async () => { try { await fetchedChannel.delete(); } catch (e) {} }, 5000);
                     }
-                    await interaction.update({ components: actionRows });
-                } catch (e) {}
-
-                return await interaction.followUp({ content: `⚠️ <@${interaction.user.id}> votou para cancelar. Falta o voto do outro participante (**${count}/2**).` });
-            } else {
-                if (interaction.client.matchTimeouts?.has(interaction.channelId)) {
-                    clearTimeout(interaction.client.matchTimeouts.get(interaction.channelId));
-                    interaction.client.matchTimeouts.delete(interaction.channelId);
-                }
-                interaction.client.cancelVotes.delete(interaction.channelId);
-
-                try {
-                    const starterMessage = await interaction.channel.fetchStarterMessage().catch(() => null);
+                    const starterMessage = await interaction.channel.messages.fetch(interaction.message.id).catch(() => null);
                     if (starterMessage) await starterMessage.delete().catch(() => {});
                 } catch (e) {}
+            }, 2 * 60 * 60 * 1000);
 
-                const embedCancel = new EmbedBuilder()
-                    .setTitle('❌ DESAFIO CANCELADO')
-                    .setDescription(`Ambos os participantes concordaram em cancelar o confronto. Este canal será eliminado em 5 segundos.`)
-                    .setColor(0xFF0000);
+            interaction.client.matchTimeouts = interaction.client.matchTimeouts || new Map();
+            interaction.client.matchTimeouts.set(thread.id, timeoutHandle);
 
-                await interaction.update({ content: '', embeds: [embedCancel], components: [] });
-                
-                setTimeout(async () => { try { await interaction.channel.delete(); } catch (e) {} }, 5000);
+        } catch (err) {
+            console.error(err);
+            return await interaction.reply({ content: '❌ Erro ao criar o tópico privado.', ephemeral: true });
+        }
+    }
+
+    if (interaction.isButton() && interaction.customId.startsWith('cancelar_desafio_')) {
+        const parts = interaction.customId.split('_');
+        const challengerId = parts[2];
+        const acceptorId = parts[3];
+
+        if (interaction.user.id !== challengerId && interaction.user.id !== acceptorId) {
+            return await interaction.reply({ content: '❌ Apenas os participantes podem cancelar o desafio!', ephemeral: true });
+        }
+
+        interaction.client.cancelVotes = interaction.client.cancelVotes || new Map();
+        let cancelSet = interaction.client.cancelVotes.get(interaction.channelId) || new Set();
+        cancelSet.add(interaction.user.id);
+        interaction.client.cancelVotes.set(interaction.channelId, cancelSet);
+
+        const count = cancelSet.size;
+
+        if (count < 2) {
+            try {
+                const actionRows = interaction.message.components;
+                for (let r of actionRows) {
+                    for (let comp of r.components) {
+                        if (comp.customId && comp.customId.startsWith('cancelar_desafio_')) {
+                            comp.data.label = `❌ Cancelar Desafio (${count}/2)`;
+                        }
+                    }
+                }
+                await interaction.update({ components: actionRows });
+            } catch (e) {}
+
+            return await interaction.followUp({ content: `⚠️ <@${interaction.user.id}> votou para cancelar. Falta o voto do outro participante (**${count}/2**).` });
+        } else {
+            if (interaction.client.matchTimeouts?.has(interaction.channelId)) {
+                clearTimeout(interaction.client.matchTimeouts.get(interaction.channelId));
+                interaction.client.matchTimeouts.delete(interaction.channelId);
             }
+            interaction.client.cancelVotes.delete(interaction.channelId);
+
+            try {
+                const starterMessage = await interaction.channel.fetchStarterMessage().catch(() => null);
+                if (starterMessage) await starterMessage.delete().catch(() => {});
+            } catch (e) {}
+
+            const embedCancel = new EmbedBuilder()
+                .setTitle('❌ DESAFIO CANCELADO')
+                .setDescription(`Ambos os participantes concordaram em cancelar o confronto. Este canal será eliminado em 5 segundos.`)
+                .setColor(0xFF0000);
+
+            await interaction.update({ content: '', embeds: [embedCancel], components: [] });
+            setTimeout(async () => { try { await interaction.channel.delete(); } catch (e) {} }, 5000);
         }
     }
 
@@ -776,9 +883,7 @@ client.on('interactionCreate', async interaction => {
 
                     await parentChannel.send({ embeds: [finalEmbed] });
                 }
-            } catch (e) {
-                console.error('Não foi possível atualizar a mensagem pública de finalização:', e);
-            }
+            } catch (e) {}
 
             const embedFinal = new EmbedBuilder()
                 .setTitle('🏆 CONFRONTO CONCLUÍDO!')
