@@ -97,12 +97,16 @@ function drawRoundImage(ctx, img, x, y, size) {
 async function generateAnaliseImage(member, stats, rankPosition, dbSettings = {}) {
     const canvas = createCanvas(800, 450);
     const ctx = canvas.getContext('2d');
-    const accentColor = COLOR_MAP[dbSettings.ligaCor] || '#e74c3c';
+    const selectedColor = COLOR_MAP[dbSettings.ligaCor] || '#e74c3c';
 
-    ctx.fillStyle = '#141416';
+    // Fundo inteiro com a cor da liga + camada escura para contraste
+    ctx.fillStyle = selectedColor;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    ctx.fillStyle = 'rgba(15, 15, 18, 0.82)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    ctx.strokeStyle = accentColor;
+    ctx.strokeStyle = selectedColor;
     ctx.lineWidth = 2;
     roundRect(ctx, 480, 30, 280, 50, 10, false, true);
     ctx.fillStyle = '#888888';
@@ -134,7 +138,7 @@ async function generateAnaliseImage(member, stats, rankPosition, dbSettings = {}
     const username = member.displayName || member.username || 'Jogador';
     ctx.fillText(username.slice(0, 20), 270, 170);
 
-    ctx.fillStyle = accentColor;
+    ctx.fillStyle = selectedColor;
     ctx.font = 'bold 20px sans-serif';
     ctx.fillText(`RANK #${rankPosition}  \vert{}${stats.points} PTS`, 270, 210);
 
@@ -150,13 +154,13 @@ async function generateAnaliseImage(member, stats, rankPosition, dbSettings = {}
     ctx.fillStyle = '#2c2d30';
     roundRect(ctx, 270, 275, 490, 8, 4, true, false);
     
-    ctx.fillStyle = accentColor;
+    ctx.fillStyle = selectedColor;
     const barraWidth = Math.max(10, (490 * parseFloat(winRate)) / 100);
     roundRect(ctx, 270, 275, barraWidth, 8, 4, true, false);
 
-    ctx.fillStyle = '#1e1f22';
+    ctx.fillStyle = 'rgba(30, 31, 34, 0.9)';
     roundRect(ctx, 360, 310, 180, 100, 12, true, false);
-    ctx.fillStyle = accentColor;
+    ctx.fillStyle = selectedColor;
     ctx.fillRect(360, 310, 4, 100);
     ctx.fillStyle = '#aaaaaa';
     ctx.font = '11px sans-serif';
@@ -166,7 +170,7 @@ async function generateAnaliseImage(member, stats, rankPosition, dbSettings = {}
     ctx.font = 'bold 36px sans-serif';
     ctx.fillText(stats.wins || 0, 385, 385);
 
-    ctx.fillStyle = '#1e1f22';
+    ctx.fillStyle = 'rgba(30, 31, 34, 0.9)';
     roundRect(ctx, 555, 310, 180, 100, 12, true, false);
     ctx.fillStyle = '#555555';
     ctx.fillRect(555, 310, 4, 100);
@@ -193,9 +197,13 @@ async function generateRankingImage(playersArray, page = 0, dbSettings = {}) {
 
     const canvas = createCanvas(W, H);
     const ctx = canvas.getContext('2d');
-    const accentColor = COLOR_MAP[dbSettings.ligaCor] || '#e74c3c';
+    const selectedColor = COLOR_MAP[dbSettings.ligaCor] || '#e74c3c';
 
-    ctx.fillStyle = '#141416';
+    // Fundo inteiro com a cor da liga + camada escura para contraste
+    ctx.fillStyle = selectedColor;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.fillStyle = 'rgba(15, 15, 18, 0.85)';
     ctx.fillRect(0, 0, W, H);
 
     ctx.fillStyle = '#ffffff';
@@ -203,7 +211,7 @@ async function generateRankingImage(playersArray, page = 0, dbSettings = {}) {
     ctx.textAlign = 'center';
     ctx.fillText('TABELA 1V1', W / 2, 45);
 
-    ctx.strokeStyle = accentColor;
+    ctx.strokeStyle = selectedColor;
     ctx.lineWidth = 1.5;
     roundRect(ctx, 250, 60, 300, 35, 8, false, true);
     ctx.fillStyle = '#888888';
@@ -225,13 +233,13 @@ async function generateRankingImage(playersArray, page = 0, dbSettings = {}) {
         const p = current[i];
         const rank = startIdx + i + 1;
 
-        ctx.fillStyle = 'rgba(30, 31, 34, 0.7)';
+        ctx.fillStyle = 'rgba(30, 31, 34, 0.85)';
         roundRect(ctx, 50, startY, 700, 60, 10, true, false);
 
         if (rank === 1) ctx.fillStyle = '#f1c40f';
         else if (rank === 2) ctx.fillStyle = '#95a5a6';
         else if (rank === 3) ctx.fillStyle = '#d35400';
-        else ctx.fillStyle = accentColor;
+        else ctx.fillStyle = selectedColor;
         ctx.fillRect(50, startY, 5, 60);
 
         ctx.fillStyle = rank === 1 ? '#f1c40f' : rank === 2 ? '#95a5a6' : rank === 3 ? '#d35400' : '#ffffff';
@@ -523,7 +531,7 @@ client.on('interactionCreate', async interaction => {
                 ]);
 
             const row = new ActionRowBuilder().addComponents(selectCor);
-            return await interaction.reply({ content: 'Selecione abaixo a nova cor para o painel e tabela:', components: [row], ephemeral: true });
+            return await interaction.reply({ content: 'Selecione abaixo a nova cor de fundo para o painel e tabela:', components: [row], ephemeral: true });
         }
 
         if (interaction.customId === 'painel_nova_liga') {
@@ -548,7 +556,7 @@ client.on('interactionCreate', async interaction => {
         const novaCor = interaction.values[0];
         db.settings.ligaCor = novaCor;
         saveDB(db);
-        return await interaction.update({ content: `✅ Cor da tabela alterada com sucesso para **${novaCor.toUpperCase()}**!`, components: [] });
+        return await interaction.update({ content: `✅ Cor de fundo da tabela alterada com sucesso para **${novaCor.toUpperCase()}**!`, components: [] });
     }
 
     if (interaction.isModalSubmit()) {
@@ -562,7 +570,6 @@ client.on('interactionCreate', async interaction => {
         if (interaction.customId === 'modal_nova_liga') {
             const novoNome = interaction.fields.getTextInputValue('input_nome_nova_liga');
             
-            // Exclui/reseta os dados da liga anterior automaticamente e cria a nova
             db.players = {};
             db.settings = {
                 ligaNome: novoNome,
