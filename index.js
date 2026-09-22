@@ -22,7 +22,7 @@ const client = new Client({
 });
 
 const TOKEN = process.env.DISCORD_TOKEN;
-const CLIENT_ID = process.env.CLIENT_ID; // ID da aplicação do bot
+const CLIENT_ID = "1551768205444259862"; // ID da aplicação atualizado
 
 // --- Configurações e Cargos ---
 const CARGO_PROCURANDO_1V1 = "1545802197101576205";
@@ -91,11 +91,9 @@ async function generateRankingImage(playersArray, page = 0, settings) {
     const canvas = createCanvas(800, 600);
     const ctx = canvas.getContext('2d');
 
-    // Fundo personalizado
     ctx.fillStyle = settings.bgColor || '#1e1e2f';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Título
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 32px sans-serif';
     ctx.fillText(settings.title || 'Ranking 1v1 SFC', 40, 60);
@@ -108,17 +106,14 @@ async function generateRankingImage(playersArray, page = 0, settings) {
         const p = currentPlayers[i];
         const rank = startIdx + i + 1;
 
-        // Caixa do jogador
         ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
         ctx.roundRect(40, y, 720, 42, 8);
         ctx.fill();
 
-        // Posição / Colocação
         ctx.fillStyle = rank === 1 ? '#FFD700' : rank === 2 ? '#C0C0C0' : rank === 3 ? '#CD7F32' : '#ffffff';
         ctx.font = 'bold 20px sans-serif';
         ctx.fillText(`#${rank}`, 60, y + 28);
 
-        // Avatar do utilizador
         if (p.avatarUrl) {
             try {
                 const avatar = await loadImage(p.avatarUrl);
@@ -129,17 +124,13 @@ async function generateRankingImage(playersArray, page = 0, settings) {
                 ctx.clip();
                 ctx.drawImage(avatar, 109, y + 5, 32, 32);
                 ctx.restore();
-            } catch (e) {
-                // Fallback se falhar carregar avatar
-            }
+            } catch (e) {}
         }
 
-        // Nome
         ctx.fillStyle = '#ffffff';
         ctx.font = '18px sans-serif';
         ctx.fillText(p.username || 'Utilizador', 155, y + 27);
 
-        // Pontos
         ctx.fillStyle = '#00ffcc';
         ctx.font = 'bold 18px sans-serif';
         ctx.textAlign = 'right';
@@ -164,7 +155,6 @@ async function generateAnalysisImage(playerData) {
     ctx.font = 'bold 26px sans-serif';
     ctx.fillText('Análise de Desempenho 1v1', 40, 50);
 
-    // Avatar
     if (playerData.avatarUrl) {
         try {
             const avatar = await loadImage(playerData.avatarUrl);
@@ -186,7 +176,6 @@ async function generateAnalysisImage(playerData) {
     ctx.font = '16px sans-serif';
     ctx.fillText(`Pontuação Atual: ${playerData.points} PTS`, 135, 148);
 
-    // Estatísticas
     const statsY = 200;
     ctx.fillStyle = '#22223b';
     ctx.fillRect(40, statsY, 160, 60);
@@ -210,11 +199,9 @@ async function generateAnalysisImage(playerData) {
 client.on('interactionCreate', async interaction => {
     const db = loadDB();
 
-    // --- COMANDOS SLASH ---
     if (interaction.isChatInputCommand()) {
         const { commandName } = interaction;
 
-        // 1. /tabela 1v1
         if (commandName === 'tabela') {
             await interaction.deferReply();
             const players = Object.values(db.players).filter(p => p.points > 0).sort((a, b) => b.points - a.points);
@@ -236,7 +223,6 @@ client.on('interactionCreate', async interaction => {
             return await interaction.editReply({ files: [attachment], components: [row] });
         }
 
-        // 2. /desafiar 1v1
         if (commandName === 'desafiar') {
             const adversario = interaction.options.getUser('adversario');
             const mapa = interaction.options.getString('mapa') || 'Mapa Aleatório';
@@ -276,7 +262,6 @@ client.on('interactionCreate', async interaction => {
             return;
         }
 
-        // 3. /analise 1v1
         if (commandName === 'analise') {
             await interaction.deferReply();
             const targetUser = interaction.options.getUser('utilizador') || interaction.user;
@@ -288,7 +273,6 @@ client.on('interactionCreate', async interaction => {
             return await interaction.editReply({ files: [attachment] });
         }
 
-        // 4. /reset 1v1
         if (commandName === 'reset') {
             if (!interaction.member.roles.cache.has(CARGO_ADMIN) && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
                 return await interaction.reply({ content: '❌ Apenas administradores podem usar este comando!', ephemeral: true });
@@ -298,7 +282,6 @@ client.on('interactionCreate', async interaction => {
             return await interaction.reply({ content: '🔄 A tabela e os dados de 1v1 foram resetados com sucesso!', ephemeral: true });
         }
 
-        // 5. /painel 1v1
         if (commandName === 'painel') {
             if (!interaction.member.roles.cache.has(CARGO_ADMIN) && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
                 return await interaction.reply({ content: '❌ Apenas administradores podem aceder ao painel!', ephemeral: true });
@@ -324,9 +307,7 @@ client.on('interactionCreate', async interaction => {
         }
     }
 
-    // --- INTERAÇÃO DE BOTÕES E MENUS ---
     if (interaction.isButton()) {
-        // Paginação da Tabela
         if (interaction.customId === 'tabela_prev' || interaction.customId === 'tabela_next') {
             const cacheData = interaction.client.tabelaCache?.get(interaction.user.id);
             if (!cacheData) return await interaction.reply({ content: 'Sessão expirada. Executa o comando `/tabela 1v1` novamente.', ephemeral: true });
@@ -342,7 +323,6 @@ client.on('interactionCreate', async interaction => {
             return await interaction.update({ files: [attachment], components: [row] });
         }
 
-        // Aceitar Desafio
         if (interaction.customId.startsWith('aceitar_desafio_')) {
             const parts = interaction.customId.split('_');
             const challengerId = parts[2];
@@ -360,7 +340,6 @@ client.on('interactionCreate', async interaction => {
                 return await interaction.reply({ content: '⚠️ Este desafio já expirou ou foi concluído.', ephemeral: true });
             }
 
-            // Criar Tópico Privado
             try {
                 const thread = await interaction.channel.threads.create({
                     name: `1v1-${interaction.user.username}`,
@@ -401,7 +380,6 @@ client.on('interactionCreate', async interaction => {
         }
     }
 
-    // --- SELECT MENU DE RESULTADOS ---
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith('resultado_1v1_')) {
         const parts = interaction.customId.split('_');
         const challengerId = parts[2];
@@ -418,7 +396,6 @@ client.on('interactionCreate', async interaction => {
 
         await interaction.reply({ content: `Votação registada: **${interaction.values[0]}**. A aguardar a resposta do outro jogador...`, ephemeral: true });
 
-        // Se ambos votaram
         if (matchVotes[challengerId] && matchVotes[acceptorId]) {
             if (matchVotes[challengerId] !== matchVotes[acceptorId]) {
                 await interaction.channel.send('⚠️ **Os votos dos dois jogadores não coincidem!** Por favor, verifiquem o resultado correto e votem novamente.');
@@ -426,7 +403,6 @@ client.on('interactionCreate', async interaction => {
                 return;
             }
 
-            // Votos coincidem, calcular pontuação (+/- 32 pontos)
             const result = matchVotes[challengerId];
             let winnerId = null, loserId = null, isDraw = false;
 
@@ -440,11 +416,9 @@ client.on('interactionCreate', async interaction => {
                 isDraw = true;
             }
 
-            // Atualizar BD
             if (!db.players[challengerId]) db.players[challengerId] = { username: 'Jogador', points: 0, wins: 0, draws: 0, losses: 0 };
             if (!db.players[acceptorId]) db.players[acceptorId] = { username: 'Jogador', points: 0, wins: 0, draws: 0, losses: 0 };
 
-            // Atualizar nomes via discord se possível
             const userC = await client.users.fetch(challengerId).catch(() => null);
             const userA = await client.users.fetch(acceptorId).catch(() => null);
             if (userC) db.players[challengerId].username = userC.username;
