@@ -458,13 +458,20 @@ client.on('interactionCreate', async interaction => {
 
             const result = matchVotes[challengerId];
             let winnerId = null, loserId = null, isDraw = false;
+            let scoreText = '';
 
             if (result.startsWith('desafiante_')) {
                 winnerId = challengerId;
                 loserId = acceptorId;
+                if (result === 'desafiante_1_0') scoreText = '1-0';
+                if (result === 'desafiante_2_1') scoreText = '2-1';
+                if (result === 'desafiante_2_0') scoreText = '2-0';
             } else if (result.startsWith('adversario_')) {
                 winnerId = acceptorId;
                 loserId = challengerId;
+                if (result === 'adversario_1_0') scoreText = '1-0';
+                if (result === 'adversario_2_1') scoreText = '2-1';
+                if (result === 'adversario_2_0') scoreText = '2-0';
             } else if (result === 'empate') {
                 isDraw = true;
             }
@@ -489,12 +496,18 @@ client.on('interactionCreate', async interaction => {
             saveDB(db);
             interaction.client.pendingResults.delete(interaction.channelId);
 
-            // Frases exatas para o Estado 3 (Finalizado)
+            // Obter o objeto do utilizador vencedor para extrair apenas o nome (username)
+            let winnerUserObj = null;
+            if (!isDraw) {
+                winnerUserObj = await client.users.fetch(winnerId).catch(() => null);
+            }
+
+            // Textos exatos pedidos para o Estado 3 (Finalizado)
             const textResult = isDraw 
                 ? 'Desafio finalizado ambos empataram' 
-                : `Desafio finalizado o vencedor foi <@${winnerId}>`;
+                : `Desafio finalizado o vencedor foi ${winnerUserObj ? winnerUserObj.username : 'Desconhecido'}`;
 
-            // Apagar a mensagem anterior de "em andamento" no canal público e enviar a nova embed de finalizado
+            // Apagar a mensagem anterior de "em andamento" no canal público e enviar a nova embed com o placar
             try {
                 const starterMessage = await interaction.channel.fetchStarterMessage().catch(() => null);
                 if (starterMessage) {
@@ -506,7 +519,8 @@ client.on('interactionCreate', async interaction => {
                         .setColor(0x00FF00)
                         .addFields(
                             { name: '👤 Desafiante', value: `<@${challengerId}>`, inline: true },
-                            { name: '🛡️ Adversário', value: `<@${acceptorId}>`, inline: true }
+                            { name: '🛡️ Adversário', value: `<@${acceptorId}>`, inline: true },
+                            { name: '📊 Placar', value: `\`${isDraw ? 'Empate' : scoreText}\``, inline: false }
                         )
                         .setTimestamp();
 
@@ -518,7 +532,7 @@ client.on('interactionCreate', async interaction => {
 
             const embedFinal = new EmbedBuilder()
                 .setTitle('🏆 CONFRONTO CONCLUÍDO!')
-                .setDescription(textResult)
+                .setDescription(`${textResult} (${isDraw ? 'Empate' : 'Placar: ' + scoreText})`)
                 .setColor(0x00FF00);
 
             await interaction.channel.send({ embeds: [embedFinal] });
