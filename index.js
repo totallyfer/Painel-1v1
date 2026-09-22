@@ -229,11 +229,7 @@ client.on('interactionCreate', async interaction => {
         const row = new ActionRowBuilder().addComponents(btnAccept);
         const content = `<@&${CARGO_PROCURANDO_1V1}>`;
 
-        const sentMsg = await interaction.channel.send({ content: content, embeds: [embed], components: [row] });
-        
-        // Guardar o ID da mensagem original para futura atualização
-        interaction.client.originalMessages = interaction.client.originalMessages || new Map();
-        
+        await interaction.channel.send({ content: content, embeds: [embed], components: [row] });
         await interaction.update({ content: '✅ Desafio publicado com sucesso no canal!', embeds: [], components: [] });
     }
 
@@ -307,12 +303,20 @@ client.on('interactionCreate', async interaction => {
                 const rowResult = new ActionRowBuilder().addComponents(selectMenuResult);
                 const rowCancel = new ActionRowBuilder().addComponents(btnCancel);
 
-                const threadMsg = await thread.send({ embeds: [embedThread], components: [rowResult, rowCancel] });
+                await thread.send({ embeds: [embedThread], components: [rowResult, rowCancel] });
 
-                // Altera a mensagem original do canal para "DESAFIO EM ANDAMENTO"
+                // Altera a mensagem original do canal para "DESAFIO EM ANDAMENTO" atualizando o adversário caso fosse aberto
                 const originalEmbed = EmbedBuilder.from(interaction.message.embeds[0])
                     .setTitle('⚔️ DESAFIO 1v1 EM ANDAMENTO')
                     .setColor(0xF1C40F);
+
+                // Se era aberto a qualquer um, atualiza o campo do adversário para o @ real de quem aceitou
+                if (targetId === 'aleatorio') {
+                    const fields = originalEmbed.data.fields;
+                    if (fields && fields[1]) {
+                        fields[1].value = `<@${interaction.user.id}>`;
+                    }
+                }
 
                 await interaction.update({ embeds: [originalEmbed], components: [] });
 
@@ -366,11 +370,7 @@ client.on('interactionCreate', async interaction => {
             const count = cancelSet.size;
 
             if (count < 2) {
-                // Atualizar o texto do botão para mostrar (1/2)
                 try {
-                    const row = ActionRowBuilder.from(interaction.message.components[0]);
-                    // Se o componente de cancelamento estiver na segunda row ou primeira
-                    // Vamos atualizar a linha correspondente ao botão de cancelar
                     const actionRows = interaction.message.components;
                     for (let r of actionRows) {
                         for (let comp of r.components) {
@@ -384,7 +384,6 @@ client.on('interactionCreate', async interaction => {
 
                 return await interaction.followUp({ content: `⚠️ <@${interaction.user.id}> votou para cancelar. Falta o voto do outro participante (**${count}/2**).`, ephemeral: false });
             } else {
-                // Limpar o timeout de 2 horas
                 if (interaction.client.matchTimeouts?.has(interaction.channelId)) {
                     clearTimeout(interaction.client.matchTimeouts.get(interaction.channelId));
                     interaction.client.matchTimeouts.delete(interaction.channelId);
@@ -428,7 +427,6 @@ client.on('interactionCreate', async interaction => {
                 return;
             }
 
-            // Limpar o timeout de 2 horas assim que o resultado é validado
             if (interaction.client.matchTimeouts?.has(interaction.channelId)) {
                 clearTimeout(interaction.client.matchTimeouts.get(interaction.channelId));
                 interaction.client.matchTimeouts.delete(interaction.channelId);
@@ -467,12 +465,12 @@ client.on('interactionCreate', async interaction => {
             saveDB(db);
             interaction.client.pendingResults.delete(interaction.channelId);
 
-            // Encontrar a mensagem original no canal pai para atualizar o estado do desafio
+            // Encontrar a mensagem original no canal pai para atualizar o estado com os textos pedidos
             try {
                 const starterMessage = await interaction.channel.fetchStarterMessage();
                 if (starterMessage) {
                     const finalEmbed = EmbedBuilder.from(starterMessage.embeds[0])
-                        .setTitle(isDraw ? '🤝 DESAFIO FINALIZADO — Ambos empataram' : `🏆 DESAFIO FINALIZADO — O vencedor foi: <@${winnerId}>`)
+                        .setTitle(isDraw ? 'desafio finalizado ambos empataram' : `desafio finalizado o vencedor foi <@${winnerId}>`)
                         .setColor(0x00FF00);
                     await starterMessage.edit({ embeds: [finalEmbed], components: [] });
                 }
@@ -482,7 +480,7 @@ client.on('interactionCreate', async interaction => {
 
             const embedFinal = new EmbedBuilder()
                 .setTitle('🏆 CONFRONTO CONCLUÍDO!')
-                .setDescription(isDraw ? 'Desafio finalizado: Ambos empataram!' : `Desafio finalizado! O vencedor foi: <@${winnerId}>`)
+                .setDescription(isDraw ? 'desafio finalizado ambos empataram' : `desafio finalizado o vencedor foi <@${winnerId}>`)
                 .setColor(0x00FF00);
 
             await interaction.channel.send({ embeds: [embedFinal] });
