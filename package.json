@@ -1,0 +1,14 @@
+   {
+  "name": "bot-1v1-sfc",
+  "version": "1.0.0",
+  "description": "Sistema completo de 1v1 para Discord",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "canvas": "^2.11.2",
+    "discord.js": "^14.14.1",
+    "express": "^4.19.2"
+  }
+}
