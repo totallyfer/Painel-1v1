@@ -318,17 +318,21 @@ client.on('interactionCreate', async interaction => {
                 const rowResult = new ActionRowBuilder().addComponents(selectMenuResult);
                 const rowCancel = new ActionRowBuilder().addComponents(btnCancel);
 
-                await thread.send({ embeds: [embedThread], components: [rowResult, rowCancel] });
+                // Mensagem dentro do tópico marcando os dois utilizadores
+                await thread.send({ 
+                    content: `⚔️ <@${challengerId}> e <@${interaction.user.id}> o vosso tópico privado foi criado!`, 
+                    embeds: [embedThread], 
+                    components: [rowResult, rowCancel] 
+                });
 
+                // Atualiza a mensagem original pública para "Desafio em andamento" (Estado 2)
                 const originalEmbed = EmbedBuilder.from(interaction.message.embeds[0])
-                    .setTitle('<a:emoji_67:1551828003015893023> DESAFIO 1v1 EM ANDAMENTO')
+                    .setTitle('⚔️ Desafio em andamento')
                     .setColor(0xF1C40F);
 
-                if (targetId === 'aleatorio') {
-                    const fields = originalEmbed.data.fields;
-                    if (fields && fields[1]) {
-                        fields[1].value = `<@${interaction.user.id}>`;
-                    }
+                const fields = originalEmbed.data.fields;
+                if (fields && fields[1]) {
+                    fields[1].value = `<@${interaction.user.id}>`;
                 }
 
                 await interaction.update({ embeds: [originalEmbed], components: [] });
@@ -487,12 +491,12 @@ client.on('interactionCreate', async interaction => {
             saveDB(db);
             interaction.client.pendingResults.delete(interaction.channelId);
 
-            // Frases exatas pedidas para o embed público e o resumo final
+            // Frases exatas pedidas para o Estado 3 (Finalizado)
             const textResult = isDraw 
                 ? 'Desafio finalizado ambos empataram' 
                 : `Desafio finalizado o vencedor foi <@${winnerId}>`;
 
-            // Atualiza a mensagem original pública no canal principal com o título final correto
+            // Atualiza a mensagem original pública no canal principal (Estado 3)
             try {
                 const starterMessage = await interaction.channel.fetchStarterMessage();
                 if (starterMessage) {
