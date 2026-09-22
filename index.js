@@ -141,10 +141,9 @@ client.on('interactionCreate', async interaction => {
                 return await interaction.reply({ content: '❌ Não podes desafiar um bot!', ephemeral: true });
             }
 
-            // Título inicial com base se tem adversário específico ou é aberto
             const titleStatus = adversario 
-                ? `:emoji_67: AGUARDANDO ${adversario.username.toUpperCase()} ACEITAR DESAFIO` 
-                : `:emoji_67: AGUARDANDO ALGUM MEMBRO ACEITAR`;
+                ? `<a:emoji_67:1551828003015893023> AGUARDANDO ${adversario.username.toUpperCase()} ACEITAR DESAFIO` 
+                : `<a:emoji_67:1551828003015893023> AGUARDANDO ALGUM MEMBRO ACEITAR`;
 
             const embed = new EmbedBuilder()
                 .setTitle(titleStatus)
@@ -221,8 +220,8 @@ client.on('interactionCreate', async interaction => {
         }
 
         const titleStatus = targetUserObj 
-            ? `:emoji_67: AGUARDANDO ${targetUserObj.username.toUpperCase()} ACEITAR DESAFIO` 
-            : `:emoji_67: AGUARDANDO ALGUM MEMBRO ACEITAR`;
+            ? `<a:emoji_67:1551828003015893023> AGUARDANDO ${targetUserObj.username.toUpperCase()} ACEITAR DESAFIO` 
+            : `<a:emoji_67:1551828003015893023> AGUARDANDO ALGUM MEMBRO ACEITAR`;
 
         const embed = new EmbedBuilder()
             .setTitle(titleStatus)
@@ -235,7 +234,7 @@ client.on('interactionCreate', async interaction => {
                 { name: '📌 Regras', value: '• Vitória: **+32 pts** | Derrota: **-32 pts** | Empate: **+10 pts**', inline: false }
             );
 
-        // ID do emoji customizado para o botão de aceitar desafio (:sla: -> 1551829027801800714)
+        // Botão com o emoji animado <a:sla:1551829027801800714>
         const btnAccept = new ButtonBuilder()
             .setCustomId(`aceitar_desafio_${challengerId}_${targetId}_${encodeURIComponent(mapa)}`)
             .setLabel('Aceitar Desafio')
@@ -321,9 +320,9 @@ client.on('interactionCreate', async interaction => {
 
                 await thread.send({ embeds: [embedThread], components: [rowResult, rowCancel] });
 
-                // Altera a mensagem original para "DESAFIO 1v1 EM ANDAMENTO" com o emoji :emoji_67:
+                // Altera para o emoji animado <a:emoji_67:1551828003015893023>
                 const originalEmbed = EmbedBuilder.from(interaction.message.embeds[0])
-                    .setTitle(':emoji_67: DESAFIO 1v1 EM ANDAMENTO')
+                    .setTitle('<a:emoji_67:1551828003015893023> DESAFIO 1v1 EM ANDAMENTO')
                     .setColor(0xF1C40F);
 
                 if (targetId === 'aleatorio') {
