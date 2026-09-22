@@ -5,7 +5,7 @@ const {
 } = require('discord.js');
 const fs = require('fs');
 const express = require('express');
-const { createCanvas, GlobalFonts, loadImage } = require('@napi-rs/canvas');
+const { createCanvas, loadImage } = require('@napi-rs/canvas');
 
 // --- Servidor Web para manter ativo (Render / Replit) ---
 const app = express();
@@ -46,9 +46,23 @@ function saveDB(data) {
 }
 
 // ============================================================
-// --- SISTEMA DE IMAGEM DE RANKING (@napi-rs/canvas) ---
+// --- FUNÇÃO AUXILIAR: RETÂNGULO ARREDONDADO ---
 // ============================================================
-const ROW_H = 80, W = 800, HEADER_H = 140;
+function roundRect(ctx, x, y, width, height, radius, fill, stroke) {
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + width - radius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    ctx.lineTo(x + width, y + height - radius);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    ctx.lineTo(x + radius, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
+    if (fill) ctx.fill();
+    if (stroke) ctx.stroke();
+}
 
 function drawRoundImage(ctx, img, x, y, size) {
     ctx.save();
@@ -60,84 +74,210 @@ function drawRoundImage(ctx, img, x, y, size) {
     ctx.restore();
 }
 
+// ============================================================
+// --- GERADOR DE IMAGEM: ANÁLISE DE PERFIL (EXEMPLO 400) ---
+// ============================================================
+async function generateAnaliseImage(member, stats, rankPosition) {
+    const canvas = createCanvas(800, 450);
+    const ctx = canvas.getContext('2d');
+
+    // Fundo escuro texturizado
+    ctx.fillStyle = '#141416';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Caixa superior "LIGA ATUAL"
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    roundRect(ctx, 480, 30, 280, 50, 10, false, true);
+    ctx.fillStyle = '#888888';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('LIGA ATUAL', 620, 50);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillText('SFC 1V1 - SEASON 1', 620, 68);
+
+    // Avatar circular do utilizador
+    let avatarImg = null;
+    try {
+        const avatarURL = member.displayAvatarURL ? member.displayAvatarURL({ extension: 'png', size: 256 }) : `https://cdn.discordapp.com/embed/avatars/0.png`;
+        avatarImg = await loadImage(avatarURL);
+    } catch {}
+
+    if (avatarImg) {
+        drawRoundImage(ctx, avatarImg, 75, 125, 150);
+    } else {
+        ctx.fillStyle = '#2c2d30';
+        ctx.beginPath();
+        ctx.arc(150, 200, 75, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Nome do Utilizador
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 36px sans-serif';
+    const username = member.displayName || member.username || 'Jogador';
+    ctx.fillText(username.slice(0, 20), 270, 170);
+
+    // Rank e Pontos
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 20px sans-serif';
+    ctx.fillText(`RANK #${rankPosition}  \vert{}${stats.points} PTS`, 270, 210);
+
+    // Barra de Taxa de Vitória
+    ctx.fillStyle = '#aaaaaa';
+    ctx.font = '11px sans-serif';
+    ctx.fillText('TAXA DE VITÓRIA', 270, 260);
+    ctx.textAlign = 'right';
+
+    const totalJogos = (stats.wins || 0) + (stats.losses || 0) + (stats.draws || 0);
+    const winRate = totalJogos > 0 ? ((stats.wins / totalJogos) * 100).toFixed(1) : '0.0';
+    ctx.fillText(`${winRate}%`, 760, 260);
+
+    // Fundo da barra
+    ctx.fillStyle = '#2c2d30';
+    roundRect(ctx, 270, 275, 490, 8, 4, true, false);
+    
+    // Preenchimento da barra
+    ctx.fillStyle = '#e74c3c';
+    const barraWidth = Math.max(10, (490 * parseFloat(winRate)) / 100);
+    roundRect(ctx, 270, 275, barraWidth, 8, 4, true, false);
+
+    // Caixa de Vitórias
+    ctx.fillStyle = '#1e1f22';
+    roundRect(ctx, 360, 310, 180, 100, 12, true, false);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(360, 310, 4, 100);
+    ctx.fillStyle = '#aaaaaa';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('VITÓRIAS', 385, 340);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 36px sans-serif';
+    ctx.fillText(stats.wins || 0, 385, 385);
+
+    // Caixa de Derrotas
+    ctx.fillStyle = '#1e1f22';
+    roundRect(ctx, 555, 310, 180, 100, 12, true, false);
+    ctx.fillStyle = '#555555';
+    ctx.fillRect(555, 310, 4, 100);
+    ctx.fillStyle = '#aaaaaa';
+    ctx.font = '11px sans-serif';
+    ctx.fillText('DERROTAS', 580, 340);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 36px sans-serif';
+    ctx.fillText(stats.losses || 0, 580, 385);
+
+    return canvas.toBuffer('image/png');
+}
+
+// ============================================================
+// --- GERADOR DE IMAGEM: TABELA DE RANKING (EXEMPLO 401) ---
+// ============================================================
+const ROW_H = 75, W = 800, HEADER_H = 130;
+
 async function generateRankingImage(playersArray, page = 0) {
-    const PER_PAGE = 10;
+    const PER_PAGE = 4; // Visual idêntico ao modelo com 4 itens por página
     const startIdx = page * PER_PAGE;
     const current = playersArray.slice(startIdx, startIdx + PER_PAGE);
-    const H = HEADER_H + Math.max(current.length, 1) * ROW_H + 40;
+    const H = HEADER_H + Math.max(current.length, 1) * ROW_H + 60;
 
     const canvas = createCanvas(W, H);
     const ctx = canvas.getContext('2d');
 
-    // Fundo
-    const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
-    bgGrad.addColorStop(0, '#0f1220');
-    bgGrad.addColorStop(1, '#1a1f36');
-    ctx.fillStyle = bgGrad;
+    // Fundo escuro
+    ctx.fillStyle = '#141416';
     ctx.fillRect(0, 0, W, H);
 
-    // Cabeçalho
-    ctx.fillStyle = '#00FFCC';
-    ctx.font = 'bold 40px sans-serif';
+    // Título Principal
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 32px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('🏆 TABELA DE CLASSIFICAÇÃO - 1v1', W / 2, 70);
-    ctx.fillStyle = '#8b93b5';
-    ctx.font = '24px sans-serif';
-    const totalPages = Math.ceil(playersArray.length / PER_PAGE) || 1;
-    ctx.fillText(`Colocações ${startIdx + 1} a ${Math.min(startIdx + PER_PAGE, playersArray.length)}  •  Página ${page + 1}/${totalPages}`, W / 2, 108);
+    ctx.fillText('TABELA 1V1', W / 2, 45);
+
+    // Caixa LIGA ATUAL
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    roundRect(ctx, 300, 60, 200, 35, 8, false, true);
+    ctx.fillStyle = '#888888';
+    ctx.font = '9px sans-serif';
+    ctx.fillText('LIGA ATUAL', W / 2, 75);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 11px sans-serif';
+    ctx.fillText('SFC 1V1 - SEASON 1', W / 2, 88);
 
     if (current.length === 0) {
-        ctx.fillStyle = '#c0c6e0';
-        ctx.font = '28px sans-serif';
-        ctx.fillText('Nenhum jogador com pontuação ainda.', W / 2, HEADER_H + 50);
+        ctx.fillStyle = '#888888';
+        ctx.font = '20px sans-serif';
+        ctx.fillText('Nenhum jogador pontuado.', W / 2, HEADER_H + 50);
         return canvas.toBuffer('image/png');
     }
 
-    const medals = { 1: '🥇', 2: '🥈', 3: '🥉' };
+    let startY = 120;
 
     for (let i = 0; i < current.length; i++) {
         const p = current[i];
         const rank = startIdx + i + 1;
-        const y = HEADER_H + i * ROW_H;
 
-        // Linha (card)
-        ctx.fillStyle = rank <= 3 ? 'rgba(0, 255, 204, 0.10)' : 'rgba(255, 255, 255, 0.05)';
-        ctx.beginPath();
-        ctx.roundRect(20, y + 5, W - 40, ROW_H - 10, 14);
-        ctx.fill();
+        // Caixa de fundo translúcida
+        ctx.fillStyle = 'rgba(30, 31, 34, 0.7)';
+        roundRect(ctx, 50, startY, 700, 60, 10, true, false);
 
-        // Colocação
+        // Detalhe lateral esquerdo colorido para o Top 3 / Padrão
+        if (rank === 1) ctx.fillStyle = '#f1c40f'; // Ouro
+        else if (rank === 2) ctx.fillStyle = '#95a5a6'; // Prata
+        else if (rank === 3) ctx.fillStyle = '#d35400'; // Bronze
+        else ctx.fillStyle = '#e74c3c'; // Vermelho SFC
+        ctx.fillRect(50, startY, 5, 60);
+
+        // Posição (#1, #2...)
+        ctx.fillStyle = rank === 1 ? '#f1c40f' : rank === 2 ? '#95a5a6' : rank === 3 ? '#d35400' : '#ffffff';
+        ctx.font = 'bold 20px sans-serif';
         ctx.textAlign = 'left';
-        ctx.font = 'bold 34px sans-serif';
-        ctx.fillStyle = rank === 1 ? '#FFD700' : rank === 2 ? '#C0C0C0' : rank === 3 ? '#CD7F32' : '#8b93b5';
-        ctx.fillText(medals[rank] ? `${medals[rank]} #${rank}` : `#${rank}`, 40, y + ROW_H / 2 + 12);
+        ctx.fillText(`#${rank}`, 75, startY + 36);
 
         // Avatar
         let avatarImg = null;
         try {
-            const avatarURL = p.avatarURL || `https://cdn.discordapp.com/embed/avatars/0.png`;
-            avatarImg = await loadImage(avatarURL);
+            if (p.avatarURL) avatarImg = await loadImage(p.avatarURL);
         } catch {}
-        if (avatarImg) drawRoundImage(ctx, avatarImg, 150, y + 12, ROW_H - 24);
 
-        // Nome + pontos
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = 'bold 28px sans-serif';
-        ctx.fillText((p.username || 'Jogador').slice(0, 22), 250, y + ROW_H / 2 - 2);
+        if (avatarImg) {
+            drawRoundImage(ctx, avatarImg, 130, startY + 10, 40);
+        } else {
+            ctx.fillStyle = '#333';
+            ctx.beginPath();
+            ctx.arc(150, startY + 30, 20, 0, Math.PI * 2);
+            ctx.fill();
+        }
 
-        ctx.fillStyle = '#00FFCC';
-        ctx.font = '22px sans-serif';
-        ctx.fillText(`${p.points} pontos`, 250, y + ROW_H / 2 + 26);
+        // Nome do Utilizador
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 18px sans-serif';
+        ctx.fillText((p.username || 'Jogador').slice(0, 18), 185, startY + 36);
+
+        // Taxa de Vitória
+        const total = (p.wins || 0) + (p.losses || 0) + (p.draws || 0);
+        const wr = total > 0 ? ((p.wins / total) * 100).toFixed(1) : '0.0';
+        ctx.fillStyle = '#2ecc71';
+        ctx.font = '12px sans-serif';
+        ctx.fillText(`TAXA DE VITÓRIA: ${wr}%`, 480, startY + 36);
 
         // Pontos à direita
+        ctx.fillStyle = '#f1c40f';
+        ctx.font = 'bold 24px sans-serif';
         ctx.textAlign = 'right';
-        ctx.fillStyle = '#FFD700';
-        ctx.font = 'bold 30px sans-serif';
-        ctx.fillText(`${p.points}`, W - 40, y + ROW_H / 2 + 10);
-        ctx.fillStyle = '#8b93b5';
-        ctx.font = '18px sans-serif';
-        ctx.fillText('PTS', W - 40, y + ROW_H / 2 + 32);
+        ctx.fillText(p.points, 725, startY + 38);
+
+        startY += 70;
     }
+
+    // Rodapé com o nome SFC
+    ctx.fillStyle = '#777777';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('SFC', W / 2, H - 20);
 
     return canvas.toBuffer('image/png');
 }
@@ -154,6 +294,9 @@ async function getRankedPlayers(db) {
         enriched.push({
             userId: p.userId,
             points: p.points,
+            wins: p.wins || 0,
+            losses: p.losses || 0,
+            draws: p.draws || 0,
             username: u ? u.username : 'Jogador',
             avatarURL: u ? u.displayAvatarURL({ extension: 'png', size: 128 }) : null
         });
@@ -163,20 +306,21 @@ async function getRankedPlayers(db) {
 
 // Gera a embed + imagem + botões de paginação da tabela
 async function buildTabelaMessage(players, page) {
+    const PER_PAGE = 4;
     const buffer = await generateRankingImage(players, page);
     const attachment = new AttachmentBuilder(buffer, { name: `tabela_pagina_${page + 1}.png` });
 
-    const totalPages = Math.ceil(players.length / 10) || 1;
+    const totalPages = Math.ceil(players.length / PER_PAGE) || 1;
     const embed = new EmbedBuilder()
-        .setTitle('🏆 Tabela de Classificação - 1v1')
-        .setColor(0x00FFCC)
+        .setTitle('🏆 Tabela de Classificação - SFC')
+        .setColor(0xE74C3C)
         .setImage(`attachment://tabela_pagina_${page + 1}.png`)
         .setTimestamp()
-        .setFooter({ text: `Página ${page + 1} de ${totalPages}` });
+        .setFooter({ text: `Página ${page + 1} de${totalPages} • SFC 1V1` });
 
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`tabela_prev_${page}`).setLabel('◀ Anterior').setStyle(ButtonStyle.Primary).setDisabled(page === 0),
-        new ButtonBuilder().setCustomId(`tabela_next_${page}`).setLabel('Próxima ▶').setStyle(ButtonStyle.Primary).setDisabled((page + 1) * 10 >= players.length)
+        new ButtonBuilder().setCustomId(`tabela_next_${page}`).setLabel('Próxima ▶').setStyle(ButtonStyle.Primary).setDisabled((page + 1) * PER_PAGE >= players.length)
     );
 
     return { embeds: [embed], files: [attachment], components: [row] };
@@ -223,7 +367,6 @@ client.on('interactionCreate', async interaction => {
         const { commandName } = interaction;
 
         if (commandName === 'tabela') {
-            // defer porque gerar a imagem + buscar avatares pode demorar >3s
             await interaction.deferReply();
 
             const players = await getRankedPlayers(db);
@@ -282,33 +425,33 @@ client.on('interactionCreate', async interaction => {
         }
 
         if (commandName === 'analise') {
+            await interaction.deferReply();
+
             const targetUser = interaction.options.getUser('utilizador') || interaction.user;
             const pData = db.players[targetUser.id] || { points: 0, wins: 0, draws: 0, losses: 0 };
-
-            const totalJogos = (pData.wins || 0) + (pData.losses || 0) + (pData.draws || 0);
-            const taxaVitorias = totalJogos > 0 ? (((pData.wins || 0) / totalJogos) * 100).toFixed(1) : '0.0';
 
             // Posição na tabela
             const allPlayers = Object.values(db.players).sort((a, b) => b.points - a.points);
             const position = allPlayers.findIndex(p => p.userId === targetUser.id);
-            const posText = position >= 0 ? `#${position + 1}` : 'Sem rank';
+            const posText = position >= 0 ? position + 1 : allPlayers.length + 1;
 
-            const embed = new EmbedBuilder()
-                .setTitle(`📊 Perfil de Desempenho - ${targetUser.username}`)
-                .setColor(0x0099FF)
-                .setThumbnail(targetUser.displayAvatarURL({ extension: 'png', size: 256 }))
-                .addFields(
-                    { name: '⭐ Pontuação', value: `\`${pData.points} PTS\``, inline: true },
-                    { name: '🏅 Posição', value: `\`${posText}\``, inline: true },
-                    { name: '📈 Taxa de Vitória', value: `\`${taxaVitorias}%\``, inline: true },
-                    { name: '🎮 Partidas', value: `\`${totalJogos}\``, inline: true },
-                    { name: '✅ Vitórias', value: `\`${pData.wins || 0}\``, inline: true },
-                    { name: '❌ Derrotas', value: `\`${pData.losses || 0}\``, inline: true },
-                    { name: '🤝 Empates', value: `\`${pData.draws || 0}\``, inline: true }
-                )
-                .setTimestamp();
+            const memberObj = await interaction.guild.members.fetch(targetUser.id).catch(() => targetUser);
 
-            return await interaction.reply({ embeds: [embed] });
+            try {
+                const buffer = await generateAnaliseImage(memberObj, pData, posText);
+                const attachment = new AttachmentBuilder(buffer, { name: `analise_${targetUser.username}.png` });
+
+                const embed = new EmbedBuilder()
+                    .setTitle(`📊 Perfil de Desempenho - ${targetUser.username}`)
+                    .setColor(0xE74C3C)
+                    .setImage(`attachment://analise_${targetUser.username}.png`)
+                    .setTimestamp();
+
+                return await interaction.editReply({ embeds: [embed], files: [attachment] });
+            } catch (err) {
+                console.error('Erro ao gerar imagem de análise:', err);
+                return await interaction.editReply({ content: '❌ Erro ao gerar o painel de análise.' });
+            }
         }
 
         if (commandName === 'reset') {
@@ -366,14 +509,13 @@ client.on('interactionCreate', async interaction => {
     }
 
     if (interaction.isButton() && (interaction.customId.startsWith('tabela_prev_') || interaction.customId.startsWith('tabela_next_'))) {
-        // Paginação da tabela: gera a imagem da página correspondente (1-10, 11-20, ...)
         await interaction.deferUpdate();
 
         const pageChange = interaction.customId.startsWith('tabela_next_') ? 1 : -1;
         const currentPage = parseInt(interaction.customId.split('_').pop(), 10);
         const newPage = currentPage + pageChange;
 
-        const players = await getRankedClientsSafe(db);
+        const players = await getRankedPlayers(db);
         if (players.length === 0) {
             return await interaction.editReply({ content: '⚠️ A tabela está vazia agora.', embeds: [], files: [], components: [] });
         }
@@ -648,23 +790,5 @@ client.on('interactionCreate', async interaction => {
         }
     }
 });
-
-// Helper para buscar jogadores com username/avatar (usado na paginação)
-async function getRankedClientsSafe(db) {
-    const players = Object.values(db.players)
-        .filter(p => p.points > 0)
-        .sort((a, b) => b.points - a.points);
-    const enriched = [];
-    for (const p of players) {
-        const u = await client.users.fetch(p.userId).catch(() => null);
-        enriched.push({
-            userId: p.userId,
-            points: p.points,
-            username: u ? u.username : 'Jogador',
-            avatarURL: u ? u.displayAvatarURL({ extension: 'png', size: 128 }) : null
-        });
-    }
-    return enriched;
-}
 
 client.login(TOKEN);
