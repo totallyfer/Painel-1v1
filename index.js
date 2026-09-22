@@ -277,7 +277,7 @@ client.on('interactionCreate', async interaction => {
             }
 
             try {
-                // Criar o tópico privado corretamente ancorado na mensagem pública
+                // Criar o tópico privado ancorado na mensagem pública
                 const thread = await interaction.message.startThread({
                     name: `1v1-${interaction.user.username}`,
                     autoArchiveDuration: 60,
@@ -303,11 +303,15 @@ client.on('interactionCreate', async interaction => {
 
                 const selectMenuResult = new StringSelectMenuBuilder()
                     .setCustomId(`resultado_1v1_${challengerId}_${interaction.user.id}`)
-                    .setPlaceholder('Selecione o resultado do confronto...')
+                    .setPlaceholder('Selecione o resultado exato do confronto...')
                     .addOptions([
-                        { label: 'Desafiante venceu', value: 'desafiante_venceu', description: 'O criador do desafio ganhou a partida' },
-                        { label: 'O que aceitou o desafio venceu', value: 'aceitou_venceu', description: 'O adversário que aceitou ganhou a partida' },
-                        { label: 'Ambos empataram', value: 'empate', description: 'A partida terminou em empate (+10 pts para cada)' }
+                        { label: 'Desafiante (1-0)', value: 'desafiante_1_0', description: 'Desafiante venceu por 1 a 0' },
+                        { label: 'Adversário (1-0)', value: 'adversario_1_0', description: 'Adversário venceu por 1 a 0' },
+                        { label: 'Desafiante (2-1)', value: 'desafiante_2_1', description: 'Desafiante venceu por 2 a 1' },
+                        { label: 'Desafiante (2-0)', value: 'desafiante_2_0', description: 'Desafiante venceu por 2 a 0' },
+                        { label: 'Adversário (2-1)', value: 'adversario_2_1', description: 'Adversário venceu por 2 a 1' },
+                        { label: 'Adversário (2-0)', value: 'adversario_2_0', description: 'Adversário venceu por 2 a 0' },
+                        { label: 'Empate Ambos', value: 'empate', description: 'A partida terminou em empate (+10 pts para cada)' }
                     ]);
 
                 const btnCancel = new ButtonBuilder()
@@ -455,10 +459,10 @@ client.on('interactionCreate', async interaction => {
             const result = matchVotes[challengerId];
             let winnerId = null, loserId = null, isDraw = false;
 
-            if (result === 'desafiante_venceu') {
+            if (result.startsWith('desafiante_')) {
                 winnerId = challengerId;
                 loserId = acceptorId;
-            } else if (result === 'aceitou_venceu') {
+            } else if (result.startsWith('adversario_')) {
                 winnerId = acceptorId;
                 loserId = challengerId;
             } else if (result === 'empate') {
@@ -485,12 +489,12 @@ client.on('interactionCreate', async interaction => {
             saveDB(db);
             interaction.client.pendingResults.delete(interaction.channelId);
 
-            // Frases exatas pedidas para o Estado 3 (Finalizado)
+            // Frases exatas para o Estado 3 (Finalizado)
             const textResult = isDraw 
                 ? 'Desafio finalizado ambos empataram' 
                 : `Desafio finalizado o vencedor foi <@${winnerId}>`;
 
-            // Apagar a mensagem anterior de "em andamento" no canal público e enviar uma nova embed de finalizada
+            // Apagar a mensagem anterior de "em andamento" no canal público e enviar a nova embed de finalizado
             try {
                 const starterMessage = await interaction.channel.fetchStarterMessage().catch(() => null);
                 if (starterMessage) {
