@@ -292,10 +292,11 @@ client.on('interactionCreate', async interaction => {
                     .setDescription(
                         `**Participantes:** <@${challengerId}> ⚔️ <@${interaction.user.id}>\n` +
                         `**Mapa:** \`${mapa}\`\n\n` +
-                        `### 📌 Instruções:\n` +
-                        `1. Joguem a partida no mapa indicado.\n` +
-                        `2. **Ambos** devem selecionar o resultado exato abaixo.\n` +
-                        `3. O canal fechará automaticamente após a validação.\n` +
+                        `### 📌 Regras e Instruções do Tópico:\n` +
+                        `1. **Envie o link do servidor privado** aqui no tópico para irem para o 1v1.\n` +
+                        `2. Ambos os participantes podem enviar mensagens livremente.\n` +
+                        `3. Joguem a partida no mapa indicado.\n` +
+                        `4. Após o jogo, **ambos** devem selecionar o resultado exato no menu abaixo.\n` +
                         `⚠️ *Nota: O cancelamento exige que ambos cliquem no botão de cancelar.*`
                     )
                     .setColor(0x00FF99);
@@ -439,7 +440,7 @@ client.on('interactionCreate', async interaction => {
         matchVotes[interaction.user.id] = interaction.values[0];
         interaction.client.pendingResults.set(interaction.channelId, matchVotes);
 
-        await interaction.reply({ content: `✅ Voto registado. A aguardar o adversário...`, ephemeral: true });
+        await interaction.reply({ content: `✅ Voto registado com sucesso. A aguardar o adversário...`, ephemeral: true });
 
         if (matchVotes[challengerId] && matchVotes[acceptorId]) {
             if (matchVotes[challengerId] !== matchVotes[acceptorId]) {
@@ -486,16 +487,17 @@ client.on('interactionCreate', async interaction => {
             saveDB(db);
             interaction.client.pendingResults.delete(interaction.channelId);
 
-            // Atualiza a mensagem original pública no canal principal
+            // Frases exatas pedidas para o embed público e o resumo final
+            const textResult = isDraw 
+                ? 'Desafio finalizado ambos empataram' 
+                : `Desafio finalizado o vencedor foi <@${winnerId}>`;
+
+            // Atualiza a mensagem original pública no canal principal com o título final correto
             try {
                 const starterMessage = await interaction.channel.fetchStarterMessage();
                 if (starterMessage) {
-                    const finalTitle = isDraw 
-                        ? '🤝 DESAFIO FINALIZADO - EMPATE' 
-                        : `🏆 DESAFIO FINALIZADO - VENCEDOR: <@${winnerId}>`;
-
                     const finalEmbed = EmbedBuilder.from(starterMessage.embeds[0])
-                        .setTitle(finalTitle)
+                        .setTitle(textResult)
                         .setColor(0x00FF00);
                     
                     const fields = finalEmbed.data.fields;
@@ -511,7 +513,7 @@ client.on('interactionCreate', async interaction => {
 
             const embedFinal = new EmbedBuilder()
                 .setTitle('🏆 CONFRONTO CONCLUÍDO!')
-                .setDescription(isDraw ? 'Desafio finalizado ambos empataram' : `Desafio finalizado o vencedor foi <@${winnerId}>`)
+                .setDescription(textResult)
                 .setColor(0x00FF00);
 
             await interaction.channel.send({ embeds: [embedFinal] });
