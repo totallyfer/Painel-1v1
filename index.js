@@ -99,7 +99,6 @@ async function generateAnaliseImage(member, stats, rankPosition, dbSettings = {}
     const ctx = canvas.getContext('2d');
     const selectedColor = COLOR_MAP[dbSettings.ligaCor] || '#e74c3c';
 
-    // Fundo inteiro com a cor da liga + camada escura para contraste
     ctx.fillStyle = selectedColor;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
@@ -683,16 +682,13 @@ client.on('interactionCreate', async interaction => {
         }
 
         try {
-            // Tópico criado como Público para permitir mensagens de ambos os membros sem bloqueios
+            // Tópico criado como Público (sem .members.add para evitar forçar estado restrito/privado)
             const thread = await interaction.message.startThread({
                 name: `1v1-${interaction.user.username}`,
                 autoArchiveDuration: 60,
                 type: ChannelType.PublicThread,
                 reason: 'Partida 1v1'
             });
-
-            await thread.members.add(challengerId).catch(() => {});
-            await thread.members.add(interaction.user.id).catch(() => {});
 
             const embedThread = new EmbedBuilder()
                 .setTitle('⚔️ SALA DE CONFRONTO 1v1')
