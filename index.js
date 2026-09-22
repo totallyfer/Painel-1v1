@@ -141,9 +141,14 @@ client.on('interactionCreate', async interaction => {
                 return await interaction.reply({ content: '❌ Não podes desafiar um bot!', ephemeral: true });
             }
 
+            // Título inicial com base se tem adversário específico ou é aberto
+            const titleStatus = adversario 
+                ? `:emoji_67: AGUARDANDO ${adversario.username.toUpperCase()} ACEITAR DESAFIO` 
+                : `:emoji_67: AGUARDANDO ALGUM MEMBRO ACEITAR`;
+
             const embed = new EmbedBuilder()
-                .setTitle('⚔️ NOVO DESAFIO 1v1 LANÇADO!')
-                .setDescription('Seleciona o mapa desejado no menu abaixo e clica para aceitar o duelo!')
+                .setTitle(titleStatus)
+                .setDescription('Seleciona o mapa desejado no menu abaixo para publicar o desafio!')
                 .setColor(0xFF4500)
                 .addFields(
                     { name: '👤 Desafiante', value: `${interaction.user}`, inline: true },
@@ -210,8 +215,17 @@ client.on('interactionCreate', async interaction => {
             return await interaction.reply({ content: '❌ Apenas quem criou o desafio pode escolher o mapa!', ephemeral: true });
         }
 
+        let targetUserObj = null;
+        if (targetId !== 'aleatorio') {
+            targetUserObj = await client.users.fetch(targetId).catch(() => null);
+        }
+
+        const titleStatus = targetUserObj 
+            ? `:emoji_67: AGUARDANDO ${targetUserObj.username.toUpperCase()} ACEITAR DESAFIO` 
+            : `:emoji_67: AGUARDANDO ALGUM MEMBRO ACEITAR`;
+
         const embed = new EmbedBuilder()
-            .setTitle('⚔️ NOVO DESAFIO 1v1 LANÇADO!')
+            .setTitle(titleStatus)
             .setDescription('Um combate foi criado. Clica no botão abaixo para aceitar o duelo!')
             .setColor(0xFF4500)
             .addFields(
@@ -221,9 +235,11 @@ client.on('interactionCreate', async interaction => {
                 { name: '📌 Regras', value: '• Vitória: **+32 pts** | Derrota: **-32 pts** | Empate: **+10 pts**', inline: false }
             );
 
+        // ID do emoji customizado para o botão de aceitar desafio (:sla: -> 1551829027801800714)
         const btnAccept = new ButtonBuilder()
             .setCustomId(`aceitar_desafio_${challengerId}_${targetId}_${encodeURIComponent(mapa)}`)
-            .setLabel('✅ Aceitar Desafio')
+            .setLabel('Aceitar Desafio')
+            .setEmoji('1551829027801800714') 
             .setStyle(ButtonStyle.Success);
 
         const row = new ActionRowBuilder().addComponents(btnAccept);
@@ -305,12 +321,11 @@ client.on('interactionCreate', async interaction => {
 
                 await thread.send({ embeds: [embedThread], components: [rowResult, rowCancel] });
 
-                // Altera a mensagem original do canal para "DESAFIO EM ANDAMENTO" atualizando o adversário caso fosse aberto
+                // Altera a mensagem original para "DESAFIO 1v1 EM ANDAMENTO" com o emoji :emoji_67:
                 const originalEmbed = EmbedBuilder.from(interaction.message.embeds[0])
-                    .setTitle('⚔️ DESAFIO 1v1 EM ANDAMENTO')
+                    .setTitle(':emoji_67: DESAFIO 1v1 EM ANDAMENTO')
                     .setColor(0xF1C40F);
 
-                // Se era aberto a qualquer um, atualiza o campo do adversário para o @ real de quem aceitou
                 if (targetId === 'aleatorio') {
                     const fields = originalEmbed.data.fields;
                     if (fields && fields[1]) {
@@ -320,7 +335,7 @@ client.on('interactionCreate', async interaction => {
 
                 await interaction.update({ embeds: [originalEmbed], components: [] });
 
-                // --- Timeout de 2 horas (7200000 ms) ---
+                // --- Timeout de 2 horas ---
                 const timeoutHandle = setTimeout(async () => {
                     try {
                         const fetchedChannel = await client.channels.fetch(thread.id).catch(() => null);
@@ -331,11 +346,10 @@ client.on('interactionCreate', async interaction => {
                             }, 5000);
                         }
 
-                        // Atualizar mensagem original se ainda existir
                         const starterMessage = await interaction.channel.messages.fetch(interaction.message.id).catch(() => null);
                         if (starterMessage) {
                             const expiredEmbed = EmbedBuilder.from(starterMessage.embeds[0])
-                                .setTitle('⌛ DESAFIO EXPIRADO (Cancelado por Inatividade - 2h)')
+                                .setTitle('⌛ Desafio expirado por inatividade (2h)')
                                 .setColor(0x7F8C8D);
                             await starterMessage.edit({ embeds: [expiredEmbed], components: [] });
                         }
@@ -389,6 +403,16 @@ client.on('interactionCreate', async interaction => {
                     interaction.client.matchTimeouts.delete(interaction.channelId);
                 }
                 interaction.client.cancelVotes.delete(interaction.channelId);
+
+                try {
+                    const starterMessage = await interaction.channel.fetchStarterMessage().catch(() => null);
+                    if (starterMessage) {
+                        const cancelEmbed = EmbedBuilder.from(starterMessage.embeds[0])
+                            .setTitle('❌ Desafio cancelado')
+                            .setColor(0xFF0000);
+                        await starterMessage.edit({ embeds: [cancelEmbed], components: [] });
+                    }
+                } catch (e) {}
 
                 const embedCancel = new EmbedBuilder()
                     .setTitle('❌ DESAFIO CANCELADO')
@@ -465,22 +489,27 @@ client.on('interactionCreate', async interaction => {
             saveDB(db);
             interaction.client.pendingResults.delete(interaction.channelId);
 
-            // Encontrar a mensagem original no canal pai para atualizar o estado com os textos pedidos
             try {
                 const starterMessage = await interaction.channel.fetchStarterMessage();
                 if (starterMessage) {
                     const finalEmbed = EmbedBuilder.from(starterMessage.embeds[0])
-                        .setTitle(isDraw ? 'desafio finalizado ambos empataram' : `desafio finalizado o vencedor foi <@${winnerId}>`)
+                        .setTitle(isDraw ? 'Desafio finalizado ambos empataram' : `Desafio finalizado o vencedor foi <@${winnerId}>`)
                         .setColor(0x00FF00);
+                    
+                    const fields = finalEmbed.data.fields;
+                    if (fields && fields[1] && fields[1].value.includes('Aberto a qualquer um')) {
+                        fields[1].value = `<@${acceptorId}>`;
+                    }
+
                     await starterMessage.edit({ embeds: [finalEmbed], components: [] });
                 }
             } catch (e) {
-                console.error("Não foi possível atualizar a mensagem original:", e);
+                console.error("Não foi possível atualizar a mensagem original pública:", e);
             }
 
             const embedFinal = new EmbedBuilder()
                 .setTitle('🏆 CONFRONTO CONCLUÍDO!')
-                .setDescription(isDraw ? 'desafio finalizado ambos empataram' : `desafio finalizado o vencedor foi <@${winnerId}>`)
+                .setDescription(isDraw ? 'Desafio finalizado ambos empataram' : `Desafio finalizado o vencedor foi <@${winnerId}>`)
                 .setColor(0x00FF00);
 
             await interaction.channel.send({ embeds: [embedFinal] });
