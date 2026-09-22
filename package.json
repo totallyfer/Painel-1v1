@@ -1,4 +1,4 @@
-   {
+{
   "name": "bot-1v1-sfc",
   "version": "1.0.0",
   "description": "Sistema completo de 1v1 para Discord",
@@ -7,7 +7,7 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "canvas": "^2.11.2",
+    "@napi-rs/canvas": "^0.1.80",
     "discord.js": "^14.14.1",
     "express": "^4.19.2"
   }
