@@ -92,7 +92,7 @@ function drawRoundImage(ctx, img, x, y, size) {
 }
 
 // ============================================================
-// --- GERADOR DE IMAGEM: ANÁLISE DE PERFIL ---
+// --- GERADOR DE IMAGEM: ANÁLISE DE PERFIL (COM EMPATES) ---
 // ============================================================
 async function generateAnaliseImage(member, stats, rankPosition, dbSettings = {}) {
     const canvas = createCanvas(800, 450);
@@ -158,28 +158,49 @@ async function generateAnaliseImage(member, stats, rankPosition, dbSettings = {}
     const barraWidth = Math.max(10, (490 * parseFloat(winRate)) / 100);
     roundRect(ctx, 270, 275, barraWidth, 8, 4, true, false);
 
+    // --- BLOCOS DE ESTATÍSTICAS (3 Caixas: Vitórias, Empates, Derrotas) ---
+    const boxWidth = 153;
+    const boxHeight = 100;
+    const boxY = 310;
+
+    // 1. Bloco de Vitórias
     ctx.fillStyle = 'rgba(30, 31, 34, 0.9)';
-    roundRect(ctx, 360, 310, 180, 100, 12, true, false);
-    ctx.fillStyle = selectedColor;
-    ctx.fillRect(360, 310, 4, 100);
+    roundRect(ctx, 270, boxY, boxWidth, boxHeight, 12, true, false);
+    ctx.fillStyle = '#2ecc71';
+    ctx.fillRect(270, boxY, 4, boxHeight);
     ctx.fillStyle = '#aaaaaa';
     ctx.font = '11px sans-serif';
     ctx.textAlign = 'left';
-    ctx.fillText('VITÓRIAS', 385, 340);
+    ctx.fillText('VITÓRIAS', 290, boxY + 30);
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 36px sans-serif';
-    ctx.fillText(stats.wins || 0, 385, 385);
+    ctx.font = 'bold 32px sans-serif';
+    ctx.fillText(stats.wins || 0, 290, boxY + 75);
 
+    // 2. Bloco de Empates
     ctx.fillStyle = 'rgba(30, 31, 34, 0.9)';
-    roundRect(ctx, 555, 310, 180, 100, 12, true, false);
-    ctx.fillStyle = '#555555';
-    ctx.fillRect(555, 310, 4, 100);
+    roundRect(ctx, 438, boxY, boxWidth, boxHeight, 12, true, false);
+    ctx.fillStyle = '#f1c40f';
+    ctx.fillRect(438, boxY, 4, boxHeight);
     ctx.fillStyle = '#aaaaaa';
     ctx.font = '11px sans-serif';
-    ctx.fillText('DERROTAS', 580, 340);
+    ctx.textAlign = 'left';
+    ctx.fillText('EMPATES', 458, boxY + 30);
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 36px sans-serif';
-    ctx.fillText(stats.losses || 0, 580, 385);
+    ctx.font = 'bold 32px sans-serif';
+    ctx.fillText(stats.draws || 0, 458, boxY + 75);
+
+    // 3. Bloco de Derrotas
+    ctx.fillStyle = 'rgba(30, 31, 34, 0.9)';
+    roundRect(ctx, 606, boxY, boxWidth, boxHeight, 12, true, false);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(606, boxY, 4, boxHeight);
+    ctx.fillStyle = '#aaaaaa';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('DERROTAS', 626, boxY + 30);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 32px sans-serif';
+    ctx.fillText(stats.losses || 0, 626, boxY + 75);
 
     return canvas.toBuffer('image/png');
 }
@@ -199,7 +220,6 @@ async function generateRankingImage(playersArray, page = 0, dbSettings = {}) {
     const ctx = canvas.getContext('2d');
     const selectedColor = COLOR_MAP[dbSettings.ligaCor] || '#e74c3c';
 
-    // Fundo inteiro com a cor da liga + camada escura para contraste
     ctx.fillStyle = selectedColor;
     ctx.fillRect(0, 0, W, H);
 
@@ -663,10 +683,12 @@ client.on('interactionCreate', async interaction => {
         }
 
         try {
+            // Tópico criado como Público para permitir mensagens de ambos os membros sem bloqueios
             const thread = await interaction.message.startThread({
                 name: `1v1-${interaction.user.username}`,
                 autoArchiveDuration: 60,
-                reason: 'Partida 1v1 privada'
+                type: ChannelType.PublicThread,
+                reason: 'Partida 1v1'
             });
 
             await thread.members.add(challengerId).catch(() => {});
@@ -708,7 +730,7 @@ client.on('interactionCreate', async interaction => {
             const rowCancel = new ActionRowBuilder().addComponents(btnCancel);
 
             await thread.send({ 
-                content: `⚔️ <@${challengerId}> e <@${interaction.user.id}> o vosso tópico privado foi criado!`, 
+                content: `⚔️ <@${challengerId}> e <@${interaction.user.id}> o vosso tópico foi criado!`, 
                 embeds: [embedThread], 
                 components: [rowResult, rowCancel] 
             });
@@ -741,7 +763,7 @@ client.on('interactionCreate', async interaction => {
 
         } catch (err) {
             console.error(err);
-            return await interaction.reply({ content: '❌ Erro ao criar o tópico privado.', ephemeral: true });
+            return await interaction.reply({ content: '❌ Erro ao criar o tópico.', ephemeral: true });
         }
     }
 
