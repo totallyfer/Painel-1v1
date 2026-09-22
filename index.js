@@ -277,10 +277,10 @@ client.on('interactionCreate', async interaction => {
             }
 
             try {
-                const thread = await interaction.channel.threads.create({
+                // Criar o tópico privado corretamente ancorado na mensagem pública
+                const thread = await interaction.message.startThread({
                     name: `1v1-${interaction.user.username}`,
                     autoArchiveDuration: 60,
-                    type: ChannelType.PrivateThread,
                     reason: 'Partida 1v1 privada'
                 });
 
@@ -318,14 +318,13 @@ client.on('interactionCreate', async interaction => {
                 const rowResult = new ActionRowBuilder().addComponents(selectMenuResult);
                 const rowCancel = new ActionRowBuilder().addComponents(btnCancel);
 
-                // Mensagem dentro do tópico marcando os dois utilizadores
                 await thread.send({ 
                     content: `⚔️ <@${challengerId}> e <@${interaction.user.id}> o vosso tópico privado foi criado!`, 
                     embeds: [embedThread], 
                     components: [rowResult, rowCancel] 
                 });
 
-                // Atualiza a mensagem original pública para "Desafio em andamento" (Estado 2)
+                // Atualizar a mensagem pública para "Desafio em andamento" (Estado 2)
                 const originalEmbed = EmbedBuilder.from(interaction.message.embeds[0])
                     .setTitle('⚔️ Desafio em andamento')
                     .setColor(0xF1C40F);
@@ -350,10 +349,7 @@ client.on('interactionCreate', async interaction => {
 
                         const starterMessage = await interaction.channel.messages.fetch(interaction.message.id).catch(() => null);
                         if (starterMessage) {
-                            const expiredEmbed = EmbedBuilder.from(starterMessage.embeds[0])
-                                .setTitle('⌛ Desafio expirado por inatividade (2h)')
-                                .setColor(0x7F8C8D);
-                            await starterMessage.edit({ embeds: [expiredEmbed], components: [] });
+                            await starterMessage.delete().catch(() => {});
                         }
                     } catch (e) {
                         console.error("Erro no timeout de 2h:", e);
@@ -406,13 +402,11 @@ client.on('interactionCreate', async interaction => {
                 }
                 interaction.client.cancelVotes.delete(interaction.channelId);
 
+                // Apagar a mensagem pública de "em andamento" no canal de comandos
                 try {
                     const starterMessage = await interaction.channel.fetchStarterMessage().catch(() => null);
                     if (starterMessage) {
-                        const cancelEmbed = EmbedBuilder.from(starterMessage.embeds[0])
-                            .setTitle('❌ Desafio cancelado')
-                            .setColor(0xFF0000);
-                        await starterMessage.edit({ embeds: [cancelEmbed], components: [] });
+                        await starterMessage.delete().catch(() => {});
                     }
                 } catch (e) {}
 
@@ -496,23 +490,26 @@ client.on('interactionCreate', async interaction => {
                 ? 'Desafio finalizado ambos empataram' 
                 : `Desafio finalizado o vencedor foi <@${winnerId}>`;
 
-            // Atualiza a mensagem original pública no canal principal (Estado 3)
+            // Apagar a mensagem anterior de "em andamento" no canal público e enviar uma nova embed de finalizada
             try {
-                const starterMessage = await interaction.channel.fetchStarterMessage();
+                const starterMessage = await interaction.channel.fetchStarterMessage().catch(() => null);
                 if (starterMessage) {
-                    const finalEmbed = EmbedBuilder.from(starterMessage.embeds[0])
-                        .setTitle(textResult)
-                        .setColor(0x00FF00);
-                    
-                    const fields = finalEmbed.data.fields;
-                    if (fields && fields[1] && fields[1].value.includes('Aberto a qualquer um')) {
-                        fields[1].value = `<@${acceptorId}>`;
-                    }
+                    const parentChannel = starterMessage.channel;
+                    await starterMessage.delete().catch(() => {});
 
-                    await starterMessage.edit({ embeds: [finalEmbed], components: [] });
+                    const finalEmbed = new EmbedBuilder()
+                        .setTitle(textResult)
+                        .setColor(0x00FF00)
+                        .addFields(
+                            { name: '👤 Desafiante', value: `<@${challengerId}>`, inline: true },
+                            { name: '🛡️ Adversário', value: `<@${acceptorId}>`, inline: true }
+                        )
+                        .setTimestamp();
+
+                    await parentChannel.send({ embeds: [finalEmbed] });
                 }
             } catch (e) {
-                console.error("Não foi possível atualizar a mensagem original pública:", e);
+                console.error("Não foi possível atualizar a mensagem pública de finalização:", e);
             }
 
             const embedFinal = new EmbedBuilder()
