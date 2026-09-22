@@ -1,8 +1,9 @@
 const { 
     Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, 
     EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, 
-    StringSelectMenuBuilder, ChannelType, PermissionFlagsBits 
+    StringSelectMenuBuilder, ChannelType, PermissionFlagsBits, AttachmentBuilder 
 } = require('discord.js');
+const { createCanvas, loadImage } = require('canvas');
 const fs = require('fs');
 const express = require('express');
 
@@ -31,7 +32,7 @@ const CARGO_ADMIN = "1545802098338304032";
 const DB_FILE = './database.json';
 function loadDB() {
     if (!fs.existsSync(DB_FILE)) {
-        fs.writeFileSync(DB_FILE, JSON.stringify({ players: {}, settings: { title: "Ranking Oficial 1v1 SFC" } }, null, 2));
+        fs.writeFileSync(DB_FILE, JSON.stringify({ players: {}, settings: { title: "Ranking 1v1 SFC" } }, null, 2));
     }
     return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
 }
@@ -47,7 +48,7 @@ client.once('ready', async () => {
     const commands = [
         new SlashCommandBuilder()
             .setName('tabela')
-            .setDescription('Mostra a tabela de classificação 1v1 avançada')
+            .setDescription('Mostra a tabela de classificação 1v1 com imagens')
             .addStringOption(option => option.setName('modo').setDescription('Modo').setRequired(true).addChoices({ name: '1v1', value: '1v1' })),
         
         new SlashCommandBuilder()
@@ -83,34 +84,75 @@ client.once('ready', async () => {
     }
 });
 
-// --- Função para gerar Embed de Ranking Avançado ---
-function generateRankingEmbed(playersArray, page = 0) {
+// --- Gerador de Imagem do Ranking com Fotos de Perfil e Cores Seguras ---
+async function generateRankingImage(playersArray, page = 0) {
+    const canvas = createCanvas(800, 650);
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = '#1e1f22';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 28px sans-serif';
+    ctx.fillText('🏆 Tabela de Classificação - 1v1 SFC', 40, 55);
+
+    ctx.fillStyle = '#949ba4';
+    ctx.font = '16px sans-serif';
+    ctx.fillText('Ranking oficial atualizado dos melhores combatentes', 40, 85);
+
     const startIdx = page * 10;
     const currentPlayers = playersArray.slice(startIdx, startIdx + 10);
 
-    const embed = new EmbedBuilder()
-        .setTitle('🏆 Tabela de Classificação - 1v1 SFC')
-        .setDescription('Confira abaixo os melhores jogadores do servidor classificados por pontuação oficial.')
-        .setColor(0x00FFCC)
-        .setTimestamp()
-        .setFooter({ text: `Página ${page + 1} de${Math.ceil(playersArray.length / 10) || 1} • Sistema SFC` });
+    let y = 120;
+    for (let i = 0; i < currentPlayers.length; i++) {
+        const p = currentPlayers[i];
+        const rank = startIdx + i + 1;
 
-    if (currentPlayers.length === 0) {
-        embed.addFields({ name: '⚠️ Sem Registos', value: 'Ainda não existem confrontos registados na tabela.' });
-    } else {
-        let descriptionText = '';
-        for (let i = 0; i < currentPlayers.length; i++) {
-            const p = currentPlayers[i];
-            const rank = startIdx + i + 1;
-            const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `\`#${rank}\``;
-            
-            descriptionText += `${medal} **${p.username}**\n` +
-                               `> 📊 Pontos: \`${p.points} PTS\` | ⚔️ V: \`${p.wins || 0}\` | ❌ D: \`${p.losses || 0}\` | 🤝 E: \`${p.draws || 0}\`\n\n`;
+        ctx.fillStyle = '#2b2d31';
+        ctx.beginPath();
+        ctx.roundRect(40, y, 720, 46, 8);
+        ctx.fill();
+
+        ctx.fillStyle = rank === 1 ? '#f1c40f' : rank === 2 ? '#95a5a6' : rank === 3 ? '#e67e22' : '#ffffff';
+        ctx.font = 'bold 18px sans-serif';
+        ctx.fillText(`#${rank}`, 60, y + 28);
+
+        if (p.avatarUrl) {
+            try {
+                const avatar = await loadImage(p.avatarUrl);
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(125, y + 23, 18, 0, Math.PI * 2, true);
+                ctx.closePath();
+                ctx.clip();
+                ctx.drawImage(avatar, 107, y + 5, 36, 36);
+                ctx.restore();
+            } catch (e) {
+                ctx.fillStyle = '#5865f2';
+                ctx.beginPath();
+                ctx.arc(125, y + 23, 18, 0, Math.PI * 2, true);
+                ctx.fill();
+            }
         }
-        embed.setDescription(descriptionText);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.fillText(p.username || 'Utilizador', 155, y + 28);
+
+        ctx.fillStyle = '#2ecc71';
+        ctx.font = '14px sans-serif';
+        ctx.fillText(`Vitórias: ${p.wins || 0}`, 490, y + 28);
+
+        ctx.fillStyle = '#00f0ff';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText(`${p.points} PTS`, 730, y + 28);
+        ctx.textAlign = 'left';
+
+        y += 52;
     }
 
-    return embed;
+    return new AttachmentBuilder(canvas.toBuffer(), { name: 'tabela-1v1.png' });
 }
 
 // --- Gestão de Comandos e Interações ---
@@ -121,8 +163,16 @@ client.on('interactionCreate', async interaction => {
         const { commandName } = interaction;
 
         if (commandName === 'tabela') {
-            const players = Object.values(db.players).sort((a, b) => b.points - a.points);
-            const embed = generateRankingEmbed(players, 0);
+            await interaction.deferReply();
+            const players = Object.values(db.players)
+                .filter(p => p.points > 0)
+                .sort((a, b) => b.points - a.points);
+            
+            if (players.length === 0) {
+                return await interaction.editReply('⚠️ Ainda não existem jogadores com pontuação positiva na tabela 1v1!');
+            }
+
+            const attachment = await generateRankingImage(players, 0);
 
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('tabela_prev').setLabel('◀ Anterior').setStyle(ButtonStyle.Primary).setDisabled(true),
@@ -132,7 +182,7 @@ client.on('interactionCreate', async interaction => {
             interaction.client.tabelaCache = interaction.client.tabelaCache || new Map();
             interaction.client.tabelaCache.set(interaction.user.id, { page: 0, players });
 
-            return await interaction.reply({ embeds: [embed], components: [row] });
+            return await interaction.editReply({ files: [attachment], components: [row] });
         }
 
         if (commandName === 'desafiar') {
@@ -154,7 +204,7 @@ client.on('interactionCreate', async interaction => {
                     { name: '👤 Desafiante', value: `${interaction.user} (\`${interaction.user.tag}\`)`, inline: true },
                     { name: '🛡️ Adversário', value: adversario ? `${adversario}` : '`Aberto a qualquer desafiante`', inline: true },
                     { name: '🗺️ Mapa Selecionado', value: `\`${mapa}\``, inline: false },
-                    { name: '📌 Regras & Instruções', value: '• O vencedor ganha pontos de ranking valiosos.\n• Ao aceitar, será criado um canal privado exclusivo para o confronto.\n• Respeite sempre as regras do fair-play.', inline: false }
+                    { name: '📌 Regras & Instruções', value: '• Vitória: **+32 pontos** | Derrota: **-32 pontos** | Empate: **+10 pontos** (para ambos).\n• Ao aceitar, será criado um canal privado exclusivo para o confronto.\n• Respeite sempre as regras do fair-play.', inline: false }
                 )
                 .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
                 .setFooter({ text: 'Sistema de Confrontos SFC • Aguardando Oponente' })
@@ -162,7 +212,7 @@ client.on('interactionCreate', async interaction => {
 
             const btnAccept = new ButtonBuilder()
                 .setCustomId(`aceitar_desafio_${interaction.user.id}_${adversario ? adversario.id : 'aleatorio'}`)
-                .setLabel('🔥 Aceitar Desafio e Entrar na Arena')
+                .setLabel('✅ Aceitar Desafio')
                 .setStyle(ButtonStyle.Success);
 
             const row = new ActionRowBuilder().addComponents(btnAccept);
@@ -243,14 +293,14 @@ client.on('interactionCreate', async interaction => {
             if (!cacheData) return await interaction.reply({ content: 'Sessão expirada. Executa o comando `/tabela 1v1` novamente.', ephemeral: true });
 
             cacheData.page += interaction.customId === 'tabela_next' ? 1 : -1;
-            const embed = generateRankingEmbed(cacheData.players, cacheData.page);
+            const attachment = await generateRankingImage(cacheData.players, cacheData.page);
 
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('tabela_prev').setLabel('◀ Anterior').setStyle(ButtonStyle.Primary).setDisabled(cacheData.page === 0),
                 new ButtonBuilder().setCustomId('tabela_next').setLabel('Próxima ▶').setStyle(ButtonStyle.Primary).setDisabled((cacheData.page + 1) * 10 >= cacheData.players.length)
             );
 
-            return await interaction.update({ embeds: [embed], components: [row] });
+            return await interaction.update({ files: [attachment], components: [row] });
         }
 
         if (interaction.customId.startsWith('aceitar_desafio_')) {
@@ -259,7 +309,7 @@ client.on('interactionCreate', async interaction => {
             const targetId = parts[3];
 
             if (interaction.user.id === challengerId) {
-                return await interaction.reply({ content: '❌ Não podes aceitar o teu próprio desafio!', ephemeral: true });
+                return await interaction.reply({ content: '❌ Não podes desafiar a ti próprio!', ephemeral: true });
             }
             if (targetId !== 'aleatorio' && interaction.user.id !== targetId) {
                 return await interaction.reply({ content: '❌ Este desafio foi direcionado especificamente para outro jogador!', ephemeral: true });
@@ -289,7 +339,7 @@ client.on('interactionCreate', async interaction => {
                         `### 📌 Instruções para Registo do Resultado:\n` +
                         `1. Joguem a partida no mapa indicado.\n` +
                         `2. **Ambos os jogadores** devem selecionar o resultado exato no menu suspenso abaixo.\n` +
-                        `3. Assim que houver concordância de votos, os pontos serão creditados automaticamente e o canal fechará em 5 segundos.`
+                        `3. O vencedor recebe **+32**, o derrotado perde **-32** e em caso de empate ambos ganham **+10 pontos**. O canal fechará em 5 segundos.`
                     )
                     .setColor(0x00FF99)
                     .setTimestamp();
@@ -304,7 +354,7 @@ client.on('interactionCreate', async interaction => {
                         { label: 'Adversário Venceu (2-0)', value: 'a_2_0', description: 'Vitória limpa de quem aceitou' },
                         { label: 'Adversário Venceu (2-1)', value: 'a_2_1', description: 'Vitória suada de quem aceitou' },
                         { label: 'Adversário Venceu (3-2)', value: 'a_3_2', description: 'Vitória disputada em MD5 por quem aceitou' },
-                        { label: 'Empate Geral (1-1)', value: 'empate', description: 'Confronto terminou empatado' }
+                        { label: 'Empate Geral (1-1)', value: 'empate', description: 'Ambos ganham +10 pontos' }
                     ]);
 
                 const rowResult = new ActionRowBuilder().addComponents(selectMenuResult);
@@ -356,22 +406,33 @@ client.on('interactionCreate', async interaction => {
                 isDraw = true;
             }
 
-            if (!db.players[challengerId]) db.players[challengerId] = { username: 'Jogador', points: 1000, wins: 0, draws: 0, losses: 0 };
-            if (!db.players[acceptorId]) db.players[acceptorId] = { username: 'Jogador', points: 1000, wins: 0, draws: 0, losses: 0 };
+            if (!db.players[challengerId]) db.players[challengerId] = { username: 'Jogador', points: 0, wins: 0, draws: 0, losses: 0, avatarUrl: '' };
+            if (!db.players[acceptorId]) db.players[acceptorId] = { username: 'Jogador', points: 0, wins: 0, draws: 0, losses: 0, avatarUrl: '' };
 
             const userC = await client.users.fetch(challengerId).catch(() => null);
             const userA = await client.users.fetch(acceptorId).catch(() => null);
-            if (userC) db.players[challengerId].username = userC.username;
-            if (userA) db.players[acceptorId].username = userA.username;
+
+            if (userC) {
+                db.players[challengerId].username = userC.username;
+                db.players[challengerId].avatarUrl = userC.displayAvatarURL({ extension: 'png', size: 64 });
+            }
+            if (userA) {
+                db.players[acceptorId].username = userA.username;
+                db.players[acceptorId].avatarUrl = userA.displayAvatarURL({ extension: 'png', size: 64 });
+            }
 
             if (isDraw) {
+                // Empate dá +10 pontos para ambos
+                db.players[challengerId].points = (db.players[challengerId].points || 0) + 10;
                 db.players[challengerId].draws = (db.players[challengerId].draws || 0) + 1;
+
+                db.players[acceptorId].points = (db.players[acceptorId].points || 0) + 10;
                 db.players[acceptorId].draws = (db.players[acceptorId].draws || 0) + 1;
             } else {
-                db.players[winnerId].points = (db.players[winnerId].points || 1000) + 32;
+                db.players[winnerId].points = (db.players[winnerId].points || 0) + 32;
                 db.players[winnerId].wins = (db.players[winnerId].wins || 0) + 1;
 
-                db.players[loserId].points = Math.max(0, (db.players[loserId].points || 1000) - 32);
+                db.players[loserId].points = (db.players[loserId].points || 0) - 32;
                 db.players[loserId].losses = (db.players[loserId].losses || 0) + 1;
             }
 
@@ -380,7 +441,7 @@ client.on('interactionCreate', async interaction => {
 
             const embedFinal = new EmbedBuilder()
                 .setTitle('🏆 CONFRONTO CONCLUÍDO COM SUCESSO!')
-                .setDescription(`O resultado foi validado por ambos os jogadores e a pontuação oficial foi atualizada.\n\nEste canal será eliminado automaticamente em 5 segundos.`)
+                .setDescription(`O resultado foi validado e a pontuação foi atualizada (Vitória: +32 | Derrota: -32 | Empate: +10).\n\nEste canal será eliminado automaticamente em 5 segundos.`)
                 .setColor(0x00FF00)
                 .setTimestamp();
 
