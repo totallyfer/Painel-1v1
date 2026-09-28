@@ -204,7 +204,7 @@ async function generateAnaliseImage(member, stats, rankPosition, dbSettings = {}
 
     ctx.fillStyle = selectedColor;
     ctx.font = 'bold 20px sans-serif';
-    ctx.fillText(`RANK #${rankPosition}  \vert{}${stats.points} PTS`, 270, 210);
+    ctx.fillText(`RANK #${rankPosition} •${stats.points} PTS`, 270, 210);
 
     ctx.fillStyle = '#aaaaaa';
     ctx.font = '11px sans-serif';
@@ -567,7 +567,6 @@ client.on('interactionCreate', async interaction => {
                 new ButtonBuilder().setCustomId('painel_nova_liga').setLabel('Nova Liga (Reset)').setStyle(ButtonStyle.Danger).setEmoji('🚨')
             );
 
-            // Removido o ephemeral: true para o painel aparecer publicamente
             return await interaction.reply({ embeds: [embed], components: [rowButtons1] });
         }
 
