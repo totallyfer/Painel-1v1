@@ -2,7 +2,7 @@ const {
     Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, 
     EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, 
     StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, 
-    ChannelType, PermissionFlagsBits, AttachmentBuilder 
+    ChannelType, PermissionFlagsBits, AttachmentBuilder, RoleSelectMenuBuilder 
 } = require('discord.js');
 const fs = require('fs');
 const express = require('express');
@@ -25,10 +25,6 @@ const client = new Client({
 const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = "1551768205444259862";
 
-const CARGO_PROCURANDO_1V1 = "1545802197101576205";
-const CARGO_ADMIN = "1545802098338304032";
-const CARGO_STAFF = "1545802108522070026";
-
 // --- Mapeamento de Cores ---
 const COLOR_MAP = {
     'lavanda': '#9b59b6',
@@ -46,20 +42,89 @@ const COLOR_MAP = {
 const DB_FILE = './database.json';
 function loadDB() {
     if (!fs.existsSync(DB_FILE)) {
-        fs.writeFileSync(DB_FILE, JSON.stringify({ players: {}, settings: { ligaNome: 'SFC 1V1 - SEASON 1', ligaCor: 'dourado' } }, null, 2));
+        fs.writeFileSync(DB_FILE, JSON.stringify({ 
+            players: {}, 
+            settings: { 
+                ligaNome: 'SFC 1V1 - SEASON 1', 
+                ligaCor: 'dourado',
+                cargoProcurando: null,
+                cargoTop1: null,
+                cargoTop2: null,
+                cargoTop3: null
+            } 
+        }, null, 2));
     }
     try {
         const data = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
-        if (!data.settings) data.settings = { ligaNome: 'SFC 1V1 - SEASON 1', ligaCor: 'dourado' };
+        if (!data.settings) {
+            data.settings = { 
+                ligaNome: 'SFC 1V1 - SEASON 1', 
+                ligaCor: 'dourado',
+                cargoProcurando: null,
+                cargoTop1: null,
+                cargoTop2: null,
+                cargoTop3: null
+            };
+        }
         return data;
     } catch {
-        return { players: {}, settings: { ligaNome: 'SFC 1V1 - SEASON 1', ligaCor: 'dourado' } };
+        return { 
+            players: {}, 
+            settings: { 
+                ligaNome: 'SFC 1V1 - SEASON 1', 
+                ligaCor: 'dourado',
+                cargoProcurando: null,
+                cargoTop1: null,
+                cargoTop2: null,
+                cargoTop3: null
+            } 
+        };
     }
 }
 function saveDB(data) {
     const tmp = DB_FILE + '.tmp';
     fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
     fs.renameSync(tmp, DB_FILE);
+}
+
+// ============================================================
+// --- FUNÇÃO PARA ATUALIZAR CARGOS DO PÓDIO AUTOMATICAMENTE ---
+// ============================================================
+async function atualizarCargosPodio(guild, db) {
+    if (!guild) return;
+    const settings = db.settings;
+    const sortedPlayers = Object.values(db.players)
+        .filter(p => p.points > 0)
+        .sort((a, b) => b.points - a.points);
+
+    const top1Id = sortedPlayers[0]?.userId || null;
+    const top2Id = sortedPlayers[1]?.userId || null;
+    const top3Id = sortedPlayers[2]?.userId || null;
+
+    const pods = [
+        { roleId: settings.cargoTop1, targetUserId: top1Id },
+        { roleId: settings.cargoTop2, targetUserId: top2Id },
+        { roleId: settings.cargoTop3, targetUserId: top3Id }
+    ];
+
+    for (const pod of pods) {
+        if (!pod.roleId) continue;
+        const role = await guild.roles.fetch(pod.roleId).catch(() => null);
+        if (!role) continue;
+
+        for (const member of role.members.values()) {
+            if (member.id !== pod.targetUserId) {
+                await member.roles.remove(role).catch(() => {});
+            }
+        }
+
+        if (pod.targetUserId) {
+            const member = await guild.members.fetch(pod.targetUserId).catch(() => null);
+            if (member && !member.roles.cache.has(role.id)) {
+                await member.roles.add(role).catch(() => {});
+            }
+        }
+    }
 }
 
 // ============================================================
@@ -92,7 +157,7 @@ function drawRoundImage(ctx, img, x, y, size) {
 }
 
 // ============================================================
-// --- GERADOR DE IMAGEM: ANÁLISE DE PERFIL (COM EMPATES) ---
+// --- GERADOR DE IMAGEM: ANÁLISE DE PERFIL ---
 // ============================================================
 async function generateAnaliseImage(member, stats, rankPosition, dbSettings = {}) {
     const canvas = createCanvas(800, 450);
@@ -157,12 +222,11 @@ async function generateAnaliseImage(member, stats, rankPosition, dbSettings = {}
     const barraWidth = Math.max(10, (490 * parseFloat(winRate)) / 100);
     roundRect(ctx, 270, 275, barraWidth, 8, 4, true, false);
 
-    // --- BLOCOS DE ESTATÍSTICAS (3 Caixas: Vitórias, Empates, Derrotas) ---
     const boxWidth = 153;
     const boxHeight = 100;
     const boxY = 310;
 
-    // 1. Bloco de Vitórias
+    // Vitórias
     ctx.fillStyle = 'rgba(30, 31, 34, 0.9)';
     roundRect(ctx, 270, boxY, boxWidth, boxHeight, 12, true, false);
     ctx.fillStyle = '#2ecc71';
@@ -175,7 +239,7 @@ async function generateAnaliseImage(member, stats, rankPosition, dbSettings = {}
     ctx.font = 'bold 32px sans-serif';
     ctx.fillText(stats.wins || 0, 290, boxY + 75);
 
-    // 2. Bloco de Empates
+    // Empates
     ctx.fillStyle = 'rgba(30, 31, 34, 0.9)';
     roundRect(ctx, 438, boxY, boxWidth, boxHeight, 12, true, false);
     ctx.fillStyle = '#f1c40f';
@@ -188,7 +252,7 @@ async function generateAnaliseImage(member, stats, rankPosition, dbSettings = {}
     ctx.font = 'bold 32px sans-serif';
     ctx.fillText(stats.draws || 0, 458, boxY + 75);
 
-    // 3. Bloco de Derrotas
+    // Derrotas
     ctx.fillStyle = 'rgba(30, 31, 34, 0.9)';
     roundRect(ctx, 606, boxY, boxWidth, boxHeight, 12, true, false);
     ctx.fillStyle = '#e74c3c';
@@ -476,32 +540,39 @@ client.on('interactionCreate', async interaction => {
         }
 
         if (commandName === 'painel') {
-            if (!interaction.member.roles.cache.has(CARGO_STAFF) && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-                return await interaction.reply({ content: '❌ Apenas membros da **Equipe Staff** podem aceder a este painel!', ephemeral: true });
+            // Verificação baseada em permissões nativas do Discord (Moderar Membros ou Administrador)
+            if (!interaction.member.permissions.has(PermissionFlagsBits.ModerateMembers) && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+                return await interaction.reply({ content: '❌ Apenas membros com permissão de **Moderação** ou **Administrador** podem aceder a este painel!', ephemeral: true });
             }
 
             const settings = db.settings;
             const embed = new EmbedBuilder()
                 .setTitle('<:moderao:1545806399169101854> Painel de Controle Administrativo - 1v1')
                 .setDescription(
-                    `Gerencie as configurações visuais e da liga atual diretamente por aqui.\n\n` +
+                    `Gerencie as configurações visuais, cargos e da liga atual diretamente por aqui.\n\n` +
                     `<:trofeu:1552002894222463107> **Liga Atual:** \`${settings.ligaNome}\`\n` +
-                    `<:cor:1552003404702687252> **Cor Temática:** \`${settings.ligaCor}\``
+                    `<:cor:1552003404702687252> **Cor Temática:** \`${settings.ligaCor}\`\n` +
+                    `🔹 **Cargo de Ping (Desafiar):** ${settings.cargoProcurando ? `<@&${settings.cargoProcurando}>` : '`Nenhum`'}\n` +
+                    `🥇 **Cargo Top 1:** ${settings.cargoTop1 ? `<@&${settings.cargoTop1}>` : '`Nenhum`'}\n` +
+                    `🥈 **Cargo Top 2:** ${settings.cargoTop2 ? `<@&${settings.cargoTop2}>` : '`Nenhum`'}\n` +
+                    `🥉 **Cargo Top 3:** ${settings.cargoTop3 ? `<@&${settings.cargoTop3}>` : '`Nenhum`'}`
                 )
                 .setColor(COLOR_MAP[settings.ligaCor] || 0xE74C3C)
                 .setTimestamp();
 
-            const rowButtons = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('painel_mudar_titulo').setLabel('Mudar Título da Liga').setStyle(ButtonStyle.Primary).setEmoji('✏️'),
-                new ButtonBuilder().setCustomId('painel_mudar_cor').setLabel('Mudar Cor da Tabela').setStyle(ButtonStyle.Secondary).setEmoji('🎨'),
-                new ButtonBuilder().setCustomId('painel_nova_liga').setLabel('Criar Nova Liga (Reset)').setStyle(ButtonStyle.Danger).setEmoji('🚨')
+            const rowButtons1 = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('painel_mudar_titulo').setLabel('Mudar Título').setStyle(ButtonStyle.Primary).setEmoji('✏️'),
+                new ButtonBuilder().setCustomId('painel_mudar_cor').setLabel('Mudar Cor').setStyle(ButtonStyle.Secondary).setEmoji('🎨'),
+                new ButtonBuilder().setCustomId('painel_config_cargos').setLabel('Configurar Cargos').setStyle(ButtonStyle.Success).setEmoji('🛡️'),
+                new ButtonBuilder().setCustomId('painel_nova_liga').setLabel('Nova Liga (Reset)').setStyle(ButtonStyle.Danger).setEmoji('🚨')
             );
 
-            return await interaction.reply({ embeds: [embed], components: [rowButtons], ephemeral: true });
+            return await interaction.reply({ embeds: [embed], components: [rowButtons1], ephemeral: true });
         }
 
         if (commandName === 'reset') {
-            if (!interaction.member.roles.cache.has(CARGO_ADMIN) && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+            // Verificação baseada em permissão nativa de Administrador
+            if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
                 return await interaction.reply({ content: '❌ Apenas administradores podem usar este comando!', ephemeral: true });
             }
             db.players = {};
@@ -510,9 +581,9 @@ client.on('interactionCreate', async interaction => {
         }
     }
 
-    // --- INTERAÇÕES DE BOTÕES DO PAINEL ---
+    // --- INTERAÇÕES DE BOTÕES E MENUS DO PAINEL ---
     if (interaction.isButton() && interaction.customId.startsWith('painel_')) {
-        if (!interaction.member.roles.cache.has(CARGO_STAFF) && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+        if (!interaction.member.permissions.has(PermissionFlagsBits.ModerateMembers) && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
             return await interaction.reply({ content: '❌ Não tens permissão para usar estes botões.', ephemeral: true });
         }
 
@@ -536,7 +607,7 @@ client.on('interactionCreate', async interaction => {
         if (interaction.customId === 'painel_mudar_cor') {
             const selectCor = new StringSelectMenuBuilder()
                 .setCustomId('select_cor_tabela')
-                .setPlaceholder('<:cor:1552003404702687252> Selecione a cor de fundo/detalhe...')
+                .setPlaceholder('🎨 Selecione a cor de fundo/detalhe...')
                 .addOptions([
                     { label: 'Lavanda', value: 'lavanda', description: 'Tom roxo suave' },
                     { label: 'Azul', value: 'azul', description: 'Azul clássico' },
@@ -551,6 +622,43 @@ client.on('interactionCreate', async interaction => {
 
             const row = new ActionRowBuilder().addComponents(selectCor);
             return await interaction.reply({ content: 'Selecione abaixo a nova cor de fundo para o painel e tabela:', components: [row], ephemeral: true });
+        }
+
+        if (interaction.customId === 'painel_config_cargos') {
+            const selectRoleProcurando = new RoleSelectMenuBuilder()
+                .setCustomId('role_select_procurando')
+                .setPlaceholder('🛡️ Selecione o cargo de Ping para Desafios...')
+                .setMinValues(1)
+                .setMaxValues(1);
+
+            const selectRoleTop1 = new RoleSelectMenuBuilder()
+                .setCustomId('role_select_top1')
+                .setPlaceholder('🥇 Selecione o cargo de Top 1...')
+                .setMinValues(1)
+                .setMaxValues(1);
+
+            const selectRoleTop2 = new RoleSelectMenuBuilder()
+                .setCustomId('role_select_top2')
+                .setPlaceholder('🥈 Selecione o cargo de Top 2...')
+                .setMinValues(1)
+                .setMaxValues(1);
+
+            const selectRoleTop3 = new RoleSelectMenuBuilder()
+                .setCustomId('role_select_top3')
+                .setPlaceholder('🥉 Selecione o cargo de Top 3...')
+                .setMinValues(1)
+                .setMaxValues(1);
+
+            return await interaction.reply({ 
+                content: 'Selecione abaixo os cargos que o bot deve atribuir e controlar automaticamente:', 
+                components: [
+                    new ActionRowBuilder().addComponents(selectRoleProcurando),
+                    new ActionRowBuilder().addComponents(selectRoleTop1),
+                    new ActionRowBuilder().addComponents(selectRoleTop2),
+                    new ActionRowBuilder().addComponents(selectRoleTop3)
+                ], 
+                ephemeral: true 
+            });
         }
 
         if (interaction.customId === 'painel_nova_liga') {
@@ -568,6 +676,33 @@ client.on('interactionCreate', async interaction => {
 
             modal.addComponents(new ActionRowBuilder().addComponents(inputNome));
             return await interaction.showModal(modal);
+        }
+    }
+
+    // --- SELEÇÃO DE CARGOS VIA MENU ---
+    if (interaction.isRoleSelectMenu()) {
+        if (interaction.customId === 'role_select_procurando') {
+            db.settings.cargoProcurando = interaction.values[0];
+            saveDB(db);
+            return await interaction.update({ content: `✅ Cargo de ping para desafios atualizado com sucesso para <@&${interaction.values[0]}>!`, components: [] });
+        }
+        if (interaction.customId === 'role_select_top1') {
+            db.settings.cargoTop1 = interaction.values[0];
+            saveDB(db);
+            await atualizarCargosPodio(interaction.guild, db);
+            return await interaction.update({ content: `✅ Cargo de Top 1 atualizado para <@&${interaction.values[0]}> e aplicado ao líder atual!`, components: [] });
+        }
+        if (interaction.customId === 'role_select_top2') {
+            db.settings.cargoTop2 = interaction.values[0];
+            saveDB(db);
+            await atualizarCargosPodio(interaction.guild, db);
+            return await interaction.update({ content: `✅ Cargo de Top 2 atualizado para <@&${interaction.values[0]}> e aplicado!`, components: [] });
+        }
+        if (interaction.customId === 'role_select_top3') {
+            db.settings.cargoTop3 = interaction.values[0];
+            saveDB(db);
+            await atualizarCargosPodio(interaction.guild, db);
+            return await interaction.update({ content: `✅ Cargo de Top 3 atualizado para <@&${interaction.values[0]}> e aplicado!`, components: [] });
         }
     }
 
@@ -590,14 +725,12 @@ client.on('interactionCreate', async interaction => {
             const novoNome = interaction.fields.getTextInputValue('input_nome_nova_liga');
             
             db.players = {};
-            db.settings = {
-                ligaNome: novoNome,
-                ligaCor: 'dourado'
-            };
+            db.settings.ligaNome = novoNome;
             saveDB(db);
+            await atualizarCargosPodio(interaction.guild, db);
 
             return await interaction.reply({ 
-                content: `🚨 **Nova liga criada com sucesso!**\n• A tabela anterior foi limpa/excluída automaticamente.\n• **Nome da Nova Liga:** \`${novoNome}\``, 
+                content: `🚨 **Nova liga criada com sucesso!**\n• A tabela anterior foi limpa/excluída.\n• **Nome da Nova Liga:** \`${novoNome}\``, 
                 ephemeral: true 
             });
         }
@@ -629,8 +762,8 @@ client.on('interactionCreate', async interaction => {
             .setColor(0xFF4500)
             .setThumbnail((await client.users.fetch(challengerId).catch(() => null))?.displayAvatarURL({ extension: 'png' }))
             .addFields(
-                { name: '<:survivor:1545838274075959526> Desafiante', value: `<@${challengerId}>`, inline: true },
-                { name: '<:unpredictable:1545838279776280596> Adversário', value: targetId !== 'aleatorio' ? `<@${targetId}>` : '`Aberto a qualquer um`', inline: true },
+                { name: '<:survivor:1545838274075959526> Desafiante', value: `${interaction.user}`, inline: true },
+                { name: '<:unpredictable:1545838279776280596> Adversário', value: targetId !== 'aleatorio' ? `${targetUserObj}` : '`Aberto a qualquer um`', inline: true },
                 { name: '🗺 Mapa', value: `\`${mapa}\``, inline: false },
                 { name: '<:analise:1545820646439657492> Regras', value: '• Vitória: **+32 pts** | Derrota: **-32 pts** | Empate: **+10 pts**', inline: false }
             );
@@ -642,7 +775,8 @@ client.on('interactionCreate', async interaction => {
             .setStyle(ButtonStyle.Success);
 
         const row = new ActionRowBuilder().addComponents(btnAccept);
-        const content = `<@&${CARGO_PROCURANDO_1V1}>`;
+        const cargoPing = db.settings.cargoProcurando;
+        const content = cargoPing ? `<@&${cargoPing}>` : '';
 
         await interaction.channel.send({ content, embeds: [embed], components: [row] });
         await interaction.update({ content: '✅ Desafio publicado com sucesso no canal!', embeds: [], components: [] });
@@ -682,7 +816,6 @@ client.on('interactionCreate', async interaction => {
         }
 
         try {
-            // Tópico criado como Público (sem .members.add para evitar forçar estado restrito/privado)
             const thread = await interaction.message.startThread({
                 name: `1v1-${interaction.user.username}`,
                 autoArchiveDuration: 60,
@@ -879,6 +1012,7 @@ client.on('interactionCreate', async interaction => {
             }
 
             saveDB(db);
+            await atualizarCargosPodio(interaction.guild, db);
             interaction.client.pendingResults.delete(interaction.channelId);
 
             let winnerUserObj = null;
