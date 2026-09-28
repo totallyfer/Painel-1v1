@@ -38,7 +38,7 @@ const COLOR_MAP = {
     'ciano': '#00bcd4'
 };
 
-// --- Base de dados local ---
+// --- Base de dados local --- h
 const DB_FILE = './database.json';
 function loadDB() {
     if (!fs.existsSync(DB_FILE)) {
