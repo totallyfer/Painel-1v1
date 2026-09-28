@@ -11,7 +11,7 @@ const { createCanvas, loadImage } = require('@napi-rs/canvas');
 // --- Servidor Web para manter ativo (Render / Replit) ---
 const app = express();
 const PORT = process.env.PORT || 3000;
-app.get('/', (req, res) => res.send('Bot de 1v1 SFC a funcionar perfeitamente!'));
+app.get('/', (req, res) => res.send('Bot de 1v1 a funcionar perfeitamente!'));
 app.listen(PORT, () => console.log(`Servidor web na porta ${PORT}`));
 
 const client = new Client({
@@ -45,7 +45,7 @@ function loadDB() {
         fs.writeFileSync(DB_FILE, JSON.stringify({ 
             players: {}, 
             settings: { 
-                ligaNome: 'SFC 1V1 - SEASON 1', 
+                ligaNome: '', 
                 ligaCor: 'dourado',
                 cargoProcurando: null,
                 cargoTop1: null,
@@ -58,7 +58,7 @@ function loadDB() {
         const data = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
         if (!data.settings) {
             data.settings = { 
-                ligaNome: 'SFC 1V1 - SEASON 1', 
+                ligaNome: '', 
                 ligaCor: 'dourado',
                 cargoProcurando: null,
                 cargoTop1: null,
@@ -71,7 +71,7 @@ function loadDB() {
         return { 
             players: {}, 
             settings: { 
-                ligaNome: 'SFC 1V1 - SEASON 1', 
+                ligaNome: '', 
                 ligaCor: 'dourado',
                 cargoProcurando: null,
                 cargoTop1: null,
@@ -179,7 +179,7 @@ async function generateAnaliseImage(member, stats, rankPosition, dbSettings = {}
     ctx.fillText('LIGA ATUAL', 620, 50);
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 14px sans-serif';
-    ctx.fillText((dbSettings.ligaNome || 'SFC 1V1 - SEASON 1').toUpperCase(), 620, 68);
+    ctx.fillText((dbSettings.ligaNome || '').toUpperCase(), 620, 68);
 
     let avatarImg = null;
     try {
@@ -302,7 +302,7 @@ async function generateRankingImage(playersArray, page = 0, dbSettings = {}) {
     ctx.fillText('LIGA ATUAL', W / 2, 75);
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 11px sans-serif';
-    ctx.fillText((dbSettings.ligaNome || 'SFC 1V1 - SEASON 1').toUpperCase(), W / 2, 88);
+    ctx.fillText((dbSettings.ligaNome || '').toUpperCase(), W / 2, 88);
 
     if (current.length === 0) {
         ctx.fillStyle = '#888888';
@@ -365,7 +365,7 @@ async function generateRankingImage(playersArray, page = 0, dbSettings = {}) {
     ctx.fillStyle = '#777777';
     ctx.font = '11px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('SFC', W / 2, H - 20);
+    ctx.fillText('', W / 2, H - 20);
 
     return canvas.toBuffer('image/png');
 }
@@ -397,12 +397,13 @@ async function buildTabelaMessage(players, page, dbSettings = {}) {
     const attachment = new AttachmentBuilder(buffer, { name: `tabela_pagina_${page + 1}.png` });
 
     const totalPages = Math.ceil(players.length / PER_PAGE) || 1;
+    const ligaTitulo = dbSettings.ligaNome ? ` - ${dbSettings.ligaNome}` : '';
     const embed = new EmbedBuilder()
-        .setTitle(`<a:br:1552001469014614131> Tabela de Classificação - ${dbSettings.ligaNome || 'SFC'}`)
+        .setTitle(`<a:br:1552001469014614131> Tabela de Classificação${ligaTitulo}`)
         .setColor(COLOR_MAP[dbSettings.ligaCor] || 0xE74C3C)
         .setImage(`attachment://tabela_pagina_${page + 1}.png`)
         .setTimestamp()
-        .setFooter({ text: `Página ${page + 1} de${totalPages} • SFC 1V1` });
+        .setFooter({ text: `Página ${page + 1} de${totalPages}` });
 
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`tabela_prev_${page}`).setLabel('◀ Anterior').setStyle(ButtonStyle.Primary).setDisabled(page === 0),
@@ -540,7 +541,6 @@ client.on('interactionCreate', async interaction => {
         }
 
         if (commandName === 'painel') {
-            // Verificação baseada em permissões nativas do Discord (Moderar Membros ou Administrador)
             if (!interaction.member.permissions.has(PermissionFlagsBits.ModerateMembers) && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
                 return await interaction.reply({ content: '❌ Apenas membros com permissão de **Moderação** ou **Administrador** podem aceder a este painel!', ephemeral: true });
             }
@@ -550,7 +550,7 @@ client.on('interactionCreate', async interaction => {
                 .setTitle('<:moderao:1545806399169101854> Painel de Controle Administrativo - 1v1')
                 .setDescription(
                     `Gerencie as configurações visuais, cargos e da liga atual diretamente por aqui.\n\n` +
-                    `<:trofeu:1552002894222463107> **Liga Atual:** \`${settings.ligaNome}\`\n` +
+                    `<:trofeu:1552002894222463107> **Liga Atual:** \`${settings.ligaNome || 'Não configurado'}\`\n` +
                     `<:cor:1552003404702687252> **Cor Temática:** \`${settings.ligaCor}\`\n` +
                     `🔹 **Cargo de Ping (Desafiar):** ${settings.cargoProcurando ? `<@&${settings.cargoProcurando}>` : '`Nenhum`'}\n` +
                     `🥇 **Cargo Top 1:** ${settings.cargoTop1 ? `<@&${settings.cargoTop1}>` : '`Nenhum`'}\n` +
@@ -571,7 +571,6 @@ client.on('interactionCreate', async interaction => {
         }
 
         if (commandName === 'reset') {
-            // Verificação baseada em permissão nativa de Administrador
             if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
                 return await interaction.reply({ content: '❌ Apenas administradores podem usar este comando!', ephemeral: true });
             }
