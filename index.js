@@ -399,7 +399,7 @@ async function buildTabelaMessage(players, page, dbSettings = {}) {
     const totalPages = Math.ceil(players.length / PER_PAGE) || 1;
     const ligaTitulo = dbSettings.ligaNome ? ` - ${dbSettings.ligaNome}` : '';
     const embed = new EmbedBuilder()
-        .setTitle(`<a:br:1552001469014614131> Tabela de Classificação${ligaTitulo}`)
+        .setTitle(`<a:brasil:1554216254187765960>  Tabela de Classificação${ligaTitulo}`)
         .setColor(COLOR_MAP[dbSettings.ligaCor] || 0xE74C3C)
         .setImage(`attachment://tabela_pagina_${page + 1}.png`)
         .setTimestamp()
@@ -482,8 +482,8 @@ client.on('interactionCreate', async interaction => {
             }
 
             const titleStatus = adversario 
-                ? `<a:emoji_67:1551828003015893023> AGUARDANDO ${adversario.username.toUpperCase()} ACEITAR DESAFIO` 
-                : `<a:emoji_67:1551828003015893023> AGUARDANDO ALGUM MEMBRO ACEITAR`;
+                ? `<a:carregando:1554216030128177152> AGUARDANDO ${adversario.username.toUpperCase()} ACEITAR DESAFIO` 
+                : `<a:carregando:1554216030128177152> AGUARDANDO ALGUM MEMBRO ACEITAR`;
 
             const embed = new EmbedBuilder()
                 .setTitle(titleStatus)
@@ -491,9 +491,9 @@ client.on('interactionCreate', async interaction => {
                 .setColor(0xFF4500)
                 .setThumbnail(interaction.user.displayAvatarURL({ extension: 'png' }))
                 .addFields(
-                    { name: '<:survivor:1545838274075959526> Desafiante', value: `${interaction.user}`, inline: true },
-                    { name: '<:unpredictable:1545838279776280596> Adversário', value: adversario ? `${adversario}` : '`Aberto a qualquer um`', inline: true },
-                    { name: '<:analise:1545820646439657492> Regras', value: '• Vitória: **+32 pts** | Derrota: **-32 pts** | Empate: **+10 pts**', inline: false }
+                    { name: '<:caveira:1554217228671516837> Desafiante', value: `${interaction.user}`, inline: true },
+                    { name: '<:imprevisivel:1554217366823633048> Adversário', value: adversario ? `${adversario}` : '`Aberto a qualquer um`', inline: true },
+                    { name: '<:analise:1554217532435595505> Regras', value: '• Vitória: **+32 pts** | Derrota: **-32 pts** | Empate: **+10 pts**', inline: false }
                 );
 
             const mapSelect = new StringSelectMenuBuilder()
@@ -528,7 +528,7 @@ client.on('interactionCreate', async interaction => {
                 const attachment = new AttachmentBuilder(buffer, { name: `analise_${targetUser.username}.png` });
 
                 const embed = new EmbedBuilder()
-                    .setTitle(`<:trofeu:1552002894222463107> Perfil de Desempenho - ${targetUser.username}`)
+                    .setTitle(`<:trofeu:1554216098319044621> Perfil de Desempenho - ${targetUser.username}`)
                     .setColor(COLOR_MAP[db.settings.ligaCor] || 0xE74C3C)
                     .setImage(`attachment://analise_${targetUser.username}.png`)
                     .setTimestamp();
@@ -550,21 +550,21 @@ client.on('interactionCreate', async interaction => {
                 .setTitle('<:moderao:1545806399169101854> Painel de Controle Administrativo - 1v1')
                 .setDescription(
                     `Gerencie as configurações visuais, cargos e da liga atual diretamente por aqui.\n\n` +
-                    `<:trofeu:1552002894222463107> **Liga Atual:** \`${settings.ligaNome || 'Não configurado'}\`\n` +
-                    `<:cor:1552003404702687252> **Cor Temática:** \`${settings.ligaCor}\`\n` +
-                    `🔹 **Cargo de Ping (Desafiar):** ${settings.cargoProcurando ? `<@&${settings.cargoProcurando}>` : '`Nenhum`'}\n` +
-                    `🥇 **Cargo Top 1:** ${settings.cargoTop1 ? `<@&${settings.cargoTop1}>` : '`Nenhum`'}\n` +
-                    `🥈 **Cargo Top 2:** ${settings.cargoTop2 ? `<@&${settings.cargoTop2}>` : '`Nenhum`'}\n` +
-                    `🥉 **Cargo Top 3:** ${settings.cargoTop3 ? `<@&${settings.cargoTop3}>` : '`Nenhum`'}`
+                    `<:trofeu:1554216098319044621> **Liga Atual:** \`${settings.ligaNome || 'Não configurado'}\`\n` +
+                    `<:custo:1554216373285163100> **Cor Temática:** \`${settings.ligaCor}\`\n` +
+                    `<:engrenagem:1554223036948021249> **Cargo de Ping (Desafiar):** ${settings.cargoProcurando ? `<@&${settings.cargoProcurando}>` : '`Nenhum`'}\n` +
+                    `<:tro:1554226308224131184> **Cargo Top 1:** ${settings.cargoTop1 ? `<@&${settings.cargoTop1}>` : '`Nenhum`'}\n` +
+                    `<:tro2:1554226635908321293> **Cargo Top 2:** ${settings.cargoTop2 ? `<@&${settings.cargoTop2}>` : '`Nenhum`'}\n` +
+                    `<:tro3:1554226883183247371> **Cargo Top 3:** ${settings.cargoTop3 ? `<@&${settings.cargoTop3}>` : '`Nenhum`'}`
                 )
                 .setColor(COLOR_MAP[settings.ligaCor] || 0xE74C3C)
                 .setTimestamp();
 
             const rowButtons1 = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('painel_mudar_titulo').setLabel('Mudar Título').setStyle(ButtonStyle.Primary).setEmoji('✏️'),
-                new ButtonBuilder().setCustomId('painel_mudar_cor').setLabel('Mudar Cor').setStyle(ButtonStyle.Secondary).setEmoji('🎨'),
-                new ButtonBuilder().setCustomId('painel_config_cargos').setLabel('Configurar Cargos').setStyle(ButtonStyle.Success).setEmoji('🛡️'),
-                new ButtonBuilder().setCustomId('painel_nova_liga').setLabel('Nova Liga (Reset)').setStyle(ButtonStyle.Danger).setEmoji('🚨')
+                new ButtonBuilder().setCustomId('painel_mudar_titulo').setLabel('Mudar Título').setStyle(ButtonStyle.Primary).setEmoji('1554222927476691064'),
+                new ButtonBuilder().setCustomId('painel_mudar_cor').setLabel('Mudar Cor').setStyle(ButtonStyle.Secondary).setEmoji('1554216373285163100'),
+                new ButtonBuilder().setCustomId('painel_config_cargos').setLabel('Configurar Cargos').setStyle(ButtonStyle.Success).setEmoji('1554223036948021249'),
+                new ButtonBuilder().setCustomId('painel_nova_liga').setLabel('Nova Liga (Reset)').setStyle(ButtonStyle.Danger).setEmoji('1554222826951540817')
             );
 
             return await interaction.reply({ embeds: [embed], components: [rowButtons1] });
@@ -752,8 +752,8 @@ client.on('interactionCreate', async interaction => {
         }
 
         const titleStatus = targetUserObj 
-            ? `<a:emoji_67:1551828003015893023> AGUARDANDO ${targetUserObj.username.toUpperCase()} ACEITAR DESAFIO` 
-            : `<a:emoji_67:1551828003015893023> AGUARDANDO ALGUM MEMBRO ACEITAR`;
+            ? `<a:carregando:1554216030128177152> AGUARDANDO ${targetUserObj.username.toUpperCase()} ACEITAR DESAFIO` 
+            : `<a:carregando:1554216030128177152> AGUARDANDO ALGUM MEMBRO ACEITAR`;
 
         const embed = new EmbedBuilder()
             .setTitle(titleStatus)
@@ -761,10 +761,10 @@ client.on('interactionCreate', async interaction => {
             .setColor(0xFF4500)
             .setThumbnail((await client.users.fetch(challengerId).catch(() => null))?.displayAvatarURL({ extension: 'png' }))
             .addFields(
-                { name: '<:survivor:1545838274075959526> Desafiante', value: `${interaction.user}`, inline: true },
-                { name: '<:unpredictable:1545838279776280596> Adversário', value: targetId !== 'aleatorio' ? `${targetUserObj}` : '`Aberto a qualquer um`', inline: true },
+                { name: '<:caveira:1554217228671516837> Desafiante', value: `${interaction.user}`, inline: true },
+                { name: '<:imprevisivel:1554217366823633048> Adversário', value: targetId !== 'aleatorio' ? `${targetUserObj}` : '`Aberto a qualquer um`', inline: true },
                 { name: '🗺 Mapa', value: `\`${mapa}\``, inline: false },
-                { name: '<:analise:1545820646439657492> Regras', value: '• Vitória: **+32 pts** | Derrota: **-32 pts** | Empate: **+10 pts**', inline: false }
+                { name: '<:analise:1554217532435595505> Regras', value: '• Vitória: **+32 pts** | Derrota: **-32 pts** | Empate: **+10 pts**', inline: false }
             );
 
         const btnAccept = new ButtonBuilder()
@@ -864,7 +864,7 @@ client.on('interactionCreate', async interaction => {
             });
 
             const originalEmbed = EmbedBuilder.from(interaction.message.embeds[0])
-                .setTitle('<a:emoji_67:1551828003015893023> Desafio em andamento')
+                .setTitle('<a:carregando:1554216030128177152> Desafio em andamento')
                 .setColor(0xF1C40F);
 
             const fields = originalEmbed.data.fields;
@@ -1020,8 +1020,8 @@ client.on('interactionCreate', async interaction => {
             }
 
             const textResult = isDraw 
-                ? '<a:sla:1551829027801800714> Desafio finalizado ambos empataram' 
-                : `<a:sla:1551829027801800714> Desafio finalizado o vencedor foi ${winnerUserObj ? winnerUserObj.username : 'Desconhecido'}`;
+                ? '<a:verificado:1554216178111610932> Desafio finalizado ambos empataram' 
+                : `<a:verificado:1554216178111610932> Desafio finalizado o vencedor foi ${winnerUserObj ? winnerUserObj.username : 'Desconhecido'}`;
 
             try {
                 const starterMessage = await interaction.channel.fetchStarterMessage().catch(() => null);
@@ -1033,8 +1033,8 @@ client.on('interactionCreate', async interaction => {
                         .setTitle(textResult)
                         .setColor(0x00FF00)
                         .addFields(
-                            { name: '<:survivor:1545838274075959526> Desafiante', value: `<@${challengerId}>`, inline: true },
-                            { name: '<:unpredictable:1545838279776280596> Adversário', value: `<@${acceptorId}>`, inline: true },
+                            { name: '<:caveira:1554217228671516837> Desafiante', value: `<@${challengerId}>`, inline: true },
+                            { name: '<:imprevisivel:1554217366823633048> Adversário', value: `<@${acceptorId}>`, inline: true },
                             { name: '📊 Placar', value: `\`${isDraw ? 'Empate' : scoreText}\``, inline: false }
                         )
                         .setTimestamp();
@@ -1044,7 +1044,7 @@ client.on('interactionCreate', async interaction => {
             } catch (e) {}
 
             const embedFinal = new EmbedBuilder()
-                .setTitle('<:trofeu:1552002894222463107>  CONFRONTO CONCLUÍDO!')
+                .setTitle('<:tro:1554226308224131184>  CONFRONTO CONCLUÍDO!')
                 .setDescription(`${textResult} (${isDraw ? 'Empate' : 'Placar: ' + scoreText})`)
                 .setColor(0x00FF00);
 
