@@ -567,7 +567,8 @@ client.on('interactionCreate', async interaction => {
                 new ButtonBuilder().setCustomId('painel_nova_liga').setLabel('Nova Liga (Reset)').setStyle(ButtonStyle.Danger).setEmoji('🚨')
             );
 
-            return await interaction.reply({ embeds: [embed], components: [rowButtons1], ephemeral: true });
+            // Removido o ephemeral: true para o painel aparecer publicamente
+            return await interaction.reply({ embeds: [embed], components: [rowButtons1] });
         }
 
         if (commandName === 'reset') {
